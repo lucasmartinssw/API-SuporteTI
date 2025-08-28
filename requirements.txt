@@ -1,0 +1,7 @@
+# python -m uvicorn app.main:app --reload
+
+fastapi
+uvicorn
+pymongo
+passlib
+bcrypt
