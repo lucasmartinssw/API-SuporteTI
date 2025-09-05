@@ -3,6 +3,9 @@ from pydantic import BaseModel
 from ..models import OperacaoDoisNumeros
 router = APIRouter(prefix="/calc", tags=["Calculadora"])
 
+@router.get("/subtracao")
+def subtracao(a: float, b: float):
+    return {"resultado": a - b}
 
 @router.get("/soma")
 def soma(a: float, b: float):

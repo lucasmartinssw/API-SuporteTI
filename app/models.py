@@ -7,9 +7,9 @@ class OperacaoDoisNumeros(BaseModel):
 class User(BaseModel):
     username: str
     password: str 
-    full_name: str  | None
-    email: str | None
-    phone: str | None
+    full_name: str  = None
+    email: str = None
+    phone: str = None
 
 class UserLogin(BaseModel):
     username: str
