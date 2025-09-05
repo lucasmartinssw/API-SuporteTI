@@ -17,6 +17,8 @@ def registrar(user: User, usuario = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail='Usuário já existe')
 
     hash_password = generate_hash(user.password)
+    #chamar viacep
+    #adiciomar cep, numero, complemento
     users.insert_one({
         "username": user.username,
         "password": hash_password,
