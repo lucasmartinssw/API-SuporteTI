@@ -4,6 +4,7 @@ from ..models import User, UserLogin
 from ..auth import get_user, generate_hash, authenticate_user, create_token, get_current_user
 from ..database import users
 from ..config import ACESS_TOKEN_EXPIRE_MINUTES
+from ..viacep import search_cep
 from datetime import datetime, timedelta
 router = APIRouter(prefix="/users", tags=["Usuarios"])
 
@@ -16,6 +17,10 @@ def registrar(user: User, usuario = Depends(get_current_user)):
     if get_user(user.username):
         raise HTTPException(status_code=400, detail='Usuário já existe')
 
+    adress_data = search_cep(user.cep)
+    if 'erro' in adress_data:
+        raise HTTPException(status_code=400, detail='Invalid CEP')
+
     hash_password = generate_hash(user.password)
     #chamar viacep
     #adiciomar cep, numero, complemento
@@ -24,7 +29,11 @@ def registrar(user: User, usuario = Depends(get_current_user)):
         "password": hash_password,
         "full_name": user.full_name,
         "email": user.email,
-        "phone": user.phone
+        "phone": user.phone,
+        "cep": user.cep,
+        "numero": user.numero,
+        "complemento": user.complemento,
+        "endereco": adress_data
     })
     return {"mensagem": "User created!"} 
 
