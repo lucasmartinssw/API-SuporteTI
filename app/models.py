@@ -10,6 +10,9 @@ class User(BaseModel):
     full_name: str  = None
     email: str = None
     phone: str = None
+    cep: str
+    numero: str
+    complemento: str
 
 class UserLogin(BaseModel):
     username: str
