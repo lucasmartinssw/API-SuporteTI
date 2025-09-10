@@ -47,3 +47,35 @@ def login(userLogin: UserLogin):
         raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
     acess_token = create_token(data={"sub": authenticated_user['username']}, expires_delta=timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES))
     return {"message": "Usuário logado com sucesso!", "token": acess_token}
+
+@router.get("/users")
+def list_users(usuario = Depends(get_current_user)):
+    user_list = []
+    for user in users.find({}, {"_id": 0, "password": 0}):
+        user_list.append(user)
+    return user_list
+
+@router.put("users/{user_username}")
+def update_user(user_username: str, user: UserRegistration, usuario = Depends(get_current_user)):
+    existing_user = users.find_one({"username": user_username})
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    address_data = search_cep(user.cep)
+    if 'erro' in address_data:
+        raise HTTPException(status_code=400, detail='Invalid CEP')
+
+    update_data = {
+        "full_name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "cep": user.cep,
+        "numero": user.numero,
+        "complemento": user.complemento,
+        "endereco": address_data
+    }
+    if user.password:
+        update_data["password"] = generate_hash(user.password)
+
+    users.update_one({"username": user_username}, {"$set": update_data})
+    return {"message": "Usuário atualizado com sucesso!"}
