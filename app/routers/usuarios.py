@@ -56,7 +56,7 @@ def list_users(usuario = Depends(get_current_user)):
     return user_list
 
 @router.put("users/{user_username}")
-def update_user(user_username: str, user: UserRegistration, usuario = Depends(get_current_user)):
+def update_user(user_username: str, user: User, usuario = Depends(get_current_user)):
     existing_user = users.find_one({"username": user_username})
     if not existing_user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
