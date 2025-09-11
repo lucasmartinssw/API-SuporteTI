@@ -10,12 +10,12 @@ router = APIRouter(prefix="/users", tags=["Usuarios"])
 
 @router.get("/")
 def test():
-    return {"message": "Rota de usuários funcionando!"}
+    return {"message": "Router Users is working!"}
 
 @router.post("/register")
 def registrar(user: User, usuario = Depends(get_current_user)):
     if get_user(user.username):
-        raise HTTPException(status_code=400, detail='Usuário já existe')
+        raise HTTPException(status_code=400, detail='User already exists')
 
     address_data = search_cep(user.cep)
     if 'erro' in address_data:
@@ -41,10 +41,10 @@ def registrar(user: User, usuario = Depends(get_current_user)):
 @router.post("/login")
 def login(userLogin: UserLogin):
     if userLogin.username is None or userLogin.password is None:
-        raise HTTPException(status_code=400, detail="Username e password são obrigatórios")
+        raise HTTPException(status_code=400, detail="Username and password are required")
     authenticated_user = authenticate_user(userLogin.username, userLogin.password)
     if not authenticated_user:
-        raise HTTPException(status_code=401, detail="Usuário ou senha inválidos")
+        raise HTTPException(status_code=401, detail="User or password invalid")
     acess_token = create_token(data={"sub": authenticated_user['username']}, expires_delta=timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES))
     return {"message": "Usuário logado com sucesso!", "token": acess_token}
 
@@ -59,7 +59,7 @@ def list_users(usuario = Depends(get_current_user)):
 def update_user(user_username: str, user: User, usuario = Depends(get_current_user)):
     existing_user = users.find_one({"username": user_username})
     if not existing_user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="User not found")
 
     address_data = search_cep(user.cep)
     if 'erro' in address_data:
@@ -78,7 +78,7 @@ def update_user(user_username: str, user: User, usuario = Depends(get_current_us
         update_data["password"] = generate_hash(user.password)
 
     users.update_one({"username": user_username}, {"$set": update_data})
-    return {"message": "Usuário atualizado com sucesso!"}
+    return {"message": "User updated!"}
 
 @router.delete("/users/{user_username}")
 def delete_user(user_username: str, usuario = Depends(get_current_user)):
