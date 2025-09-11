@@ -55,12 +55,12 @@ def list_users(usuario = Depends(get_current_user)):
         user_list.append(user)
     return user_list
 
-@router.put("users/{user_username}")
+@router.put("/users/{user_username}")
 def update_user(user_username: str, user: User, usuario = Depends(get_current_user)):
     existing_user = users.find_one({"username": user_username})
     if not existing_user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
+
     address_data = search_cep(user.cep)
     if 'erro' in address_data:
         raise HTTPException(status_code=400, detail='Invalid CEP')
@@ -79,3 +79,14 @@ def update_user(user_username: str, user: User, usuario = Depends(get_current_us
 
     users.update_one({"username": user_username}, {"$set": update_data})
     return {"message": "Usuário atualizado com sucesso!"}
+
+@router.delete("/users/{user_username}")
+def delete_user(user_username: str, usuario = Depends(get_current_user)):
+    existing_user = users.find_one({"username": user_username})
+    if not existing_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_username == usuario['username']:
+        raise HTTPException(status_code=403, detail="User cannot delete themselves")
+
+    users.delete_one({"username": user_username})
+    return {"message": "User deleted!"}
