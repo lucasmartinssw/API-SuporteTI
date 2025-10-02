@@ -1,13 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from .routers import calculadora, usuarios, viacep
+from .routers import usuarios
 
-app = FastAPI(title="API Calculadora", description="API para realizar operações matemáticas", version="1.0")
+app = FastAPI(title="API Final Project", description="API for Final Project", version="1.0")
 
 @app.get("/")
 def root():
-    return {"message": "API Calculadora - Bem-vindo!"}
+    return {"message": "API Final Project - Bem-vindo!"}
 
-app.include_router(calculadora.router)
 app.include_router(usuarios.router)
-app.include_router(viacep.router)

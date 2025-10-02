@@ -1,4 +1,4 @@
-from .database import users
+from .database import conn, cursor
 from passlib.context import CryptContext
 from datetime import timedelta, datetime
 from .config import SECRET_KEY, ALGORITHM

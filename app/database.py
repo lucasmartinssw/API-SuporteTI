@@ -1,6 +1,10 @@
-from pymongo import MongoClient
-from .config import MONGO_URL, MONGO_DB
+import mysql.connector
 
-client = MongoClient(MONGO_URL)
-db = client[MONGO_DB]
-users = db["users"]
+conn = mysql.connector.connect(
+    host="127.0.0.1",
+    user="root",
+    password="User-12910",
+    database="ti_support"
+)
+
+cursor = conn.cursor(dictionary=True)

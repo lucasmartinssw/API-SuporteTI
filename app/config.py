@@ -1,5 +1,7 @@
-MONGO_URL = "mongodb://localhost:27017/"
-MONGO_DB = "calculator_db"
+HOST = "127.0.0.1:3300"
+USER = "root"
+PASSWORD = "User-12910"
+DATABASE = "ti_support"
 ACESS_TOKEN_EXPIRE_MINUTES = 10
 SECRET_KEY = "your_secret_key" 
 ALGORITHM = "HS256"

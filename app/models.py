@@ -5,14 +5,10 @@ class OperacaoDoisNumeros(BaseModel):
     b: float
 
 class User(BaseModel):
-    username: str
+    name: str
+    email: str
     password: str 
-    full_name: str  = None
-    email: str = None
-    phone: str = None
-    cep: str
-    numero: str
-    complemento: str
+    user_type: str
 
 class UserLogin(BaseModel):
     username: str
