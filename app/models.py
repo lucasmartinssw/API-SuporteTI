@@ -11,11 +11,11 @@ class User(BaseModel):
     user_type: str
 
 class UserLogin(BaseModel):
-    username: str
+    user: str
     password: str
 
 class UserRegistration(BaseModel):
-    username: str
+    user: str
     password: str
     cep: str
     numero: str
