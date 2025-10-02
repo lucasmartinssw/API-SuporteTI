@@ -4,7 +4,7 @@
 
 1. **Clone o repositório**
    ```sh
-   git clone https://github.com/lucasmartinssw/Calculator-Python
+   git clone https://github.com/lucasmartinssw/API-SuporteTI
     ```
 2. **Instale as dependências**
 ```sh
