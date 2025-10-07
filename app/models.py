@@ -17,6 +17,9 @@ class UserLogin(BaseModel):
 class UserRegistration(BaseModel):
     user: str
     password: str
-    cep: str
-    numero: str
-    complemento: str
+
+class UserUpdate(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    password: str | None = None
+    user_type: str | None = None

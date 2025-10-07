@@ -10,7 +10,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def get_user(name: str):
-    cursor.execute("SELECT * FROM user WHERE name = %s", (name,))
+    cursor.execute("SELECT * FROM users WHERE name = %s", (name,))
     user = cursor.fetchone()
     return user
 
