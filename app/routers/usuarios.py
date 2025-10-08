@@ -37,11 +37,11 @@ def registrar(user: User):
 
 @router.post("/login")
 def login(userLogin: UserLogin):
-    cursor.execute("SELECT * FROM users WHERE name = %s", (userLogin.user,))
+    cursor.execute("SELECT * FROM users WHERE email = %s", (userLogin.email,))
     user_data = cursor.fetchone()
 
     if not user_data or not verify_password(userLogin.password, user_data['password']):
-        raise HTTPException(status_code=401, detail="Invalid name or password")
+        raise HTTPException(status_code=401, detail="Invalid e-mail or password")
 
     expires_delta = timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES)
     token_data = {"sub": user_data['name']}

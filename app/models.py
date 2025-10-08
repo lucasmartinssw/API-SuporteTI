@@ -11,7 +11,7 @@ class User(BaseModel):
     user_type: str
 
 class UserLogin(BaseModel):
-    user: str
+    email: str
     password: str
 
 class UserRegistration(BaseModel):
