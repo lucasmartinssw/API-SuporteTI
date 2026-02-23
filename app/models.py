@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 class OperacaoDoisNumeros(BaseModel):
     a: float
@@ -6,20 +7,18 @@ class OperacaoDoisNumeros(BaseModel):
 
 class User(BaseModel):
     name: str
-    email: str
+    email: EmailStr # Garante que o formato do email seja válido
     password: str 
     user_type: str
 
 class UserLogin(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
-class UserRegistration(BaseModel):
-    user: str
-    password: str
+# Removi o UserRegistration pois era redundante/não utilizado
 
 class UserUpdate(BaseModel):
-    name: str | None = None
-    email: str | None = None
-    password: str | None = None
-    user_type: str | None = None
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    user_type: Optional[str] = None
