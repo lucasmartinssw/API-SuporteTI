@@ -3,7 +3,8 @@
 fastapi
 uvicorn
 mysql-connector-python
-passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
 python-multipart
 requests
+pydantic[email]
