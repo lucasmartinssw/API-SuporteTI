@@ -13,7 +13,7 @@ security = HTTPBearer()
 
 def get_user_by_email(email: str, cursor):
     """Busca o usuário no banco pelo email."""
-    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+    cursor.execute("SELECT id, nome, email, senha, cargo, created_at FROM users WHERE email = %s", (email,))
     return cursor.fetchone()
 
 def pre_processar_senha(password: str) -> str:

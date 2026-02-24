@@ -22,3 +22,21 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None
     user_type: Optional[str] = None
+
+
+class ChamadoCreate(BaseModel):
+    title: str
+    description: str
+
+
+class ChamadoOut(BaseModel):
+    id: int
+    title: str
+    description: str
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    user_email: Optional[EmailStr] = None
+
+
+class MensagemCreate(BaseModel):
+    content: str

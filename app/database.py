@@ -12,7 +12,7 @@ def get_db_connection():
         conn = mysql.connector.connect(
             host="127.0.0.1",
             user="root",
-            password="root",
+            password="User-12910",
             database="projetofinal"
         )
         # Entrega a conexão para a requisição atual
