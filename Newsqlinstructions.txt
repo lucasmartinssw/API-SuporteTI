@@ -1,0 +1,91 @@
+
+
+
+USE projetofinal;
+
+
+
+
+
+-- Tabela de Usuários
+CREATE TABLE users (
+id INT PRIMARY KEY AUTO_INCREMENT,
+nome VARCHAR(100) NOT NULL,
+email VARCHAR(100) UNIQUE NOT NULL,
+senha VARCHAR(255) NOT NULL,
+cargo ENUM('admin', 'tecnico', 'usuario') DEFAULT 'usuario',
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+-- Tabelas de Auxiliares (Parametrização)
+CREATE TABLE categorias (
+id INT PRIMARY KEY AUTO_INCREMENT,
+nome VARCHAR(50) NOT NULL
+);
+CREATE TABLE prioridades (
+id INT PRIMARY KEY AUTO_INCREMENT,
+nivel VARCHAR(20) NOT NULL -- Ex: Baixa, Média, Alta
+);
+CREATE TABLE status_chamado (
+id INT PRIMARY KEY AUTO_INCREMENT,
+nome VARCHAR(30) NOT NULL -- Ex: Aberto, Em Atendimento, Concluído
+);
+-- Tabela Principal de Chamados
+CREATE TABLE chamados (
+id INT PRIMARY KEY AUTO_INCREMENT,
+titulo VARCHAR(150) NOT NULL,
+descricao TEXT NOT NULL,
+user_id INT,
+categoria_id INT,
+prioridade_id INT,
+status_id INT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (user_id) REFERENCES users(id),
+FOREIGN KEY (categoria_id) REFERENCES categorias(id),
+FOREIGN KEY (prioridade_id) REFERENCES prioridades(id),
+FOREIGN KEY (status_id) REFERENCES status_chamado(id)
+);
+-- Tabela de Mídias (Anexos)
+CREATE TABLE chamados_midia (
+id INT PRIMARY KEY AUTO_INCREMENT,
+chamado_id INT,
+url_arquivo VARCHAR(255) NOT NULL,
+tipo_arquivo VARCHAR(50), -- Ex: image/png, video/mp4
+FOREIGN KEY (chamado_id) REFERENCES chamados(id) ON DELETE CASCADE
+);
+-- Tabela de Chat (Interações)
+CREATE TABLE chamados_mensagens (
+id INT PRIMARY KEY AUTO_INCREMENT,
+chamado_id INT,
+user_id INT,
+mensagem TEXT NOT NULL,
+enviado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+FOREIGN KEY (chamado_id) REFERENCES chamados(id) ON DELETE CASCADE,
+FOREIGN KEY (user_id) REFERENCES users(id)
+);
+DESCRIBE users;
+USE projetofinal;
+ALTER TABLE users MODIFY COLUMN cargo VARCHAR(100);
+
+USE projetofinal;
+
+-- Prioridades (prioridade_id)
+INSERT INTO prioridades (id, nivel) VALUES
+  (1, 'Baixa'),
+  (2, 'Média'),
+  (3, 'Alta');
+
+-- Status do chamado (status_id)
+INSERT INTO status_chamado (id, nome) VALUES
+  (1, 'Aberto'),
+  (2, 'Em Atendimento'),
+  (3, 'Concluído');
+
+-- Uma categoria padrão (opcional)
+INSERT INTO categorias (id, nome) VALUES
+  (1, 'Geral');
+  
+  
+  SELECT * FROM prioridades;
+SELECT * FROM status_chamado;
+SELECT * FROM categorias;
