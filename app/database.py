@@ -13,7 +13,7 @@ def get_db_connection():
             host="127.0.0.1",
             user="root",
             password="root",
-            database="projetofinal"
+            database="projetofinal2"
         )
         # Entrega a conexão para a requisição atual
         yield conn
