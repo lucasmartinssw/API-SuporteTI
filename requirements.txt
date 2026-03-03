@@ -9,3 +9,4 @@ python-multipart
 requests
 pydantic[email]
 supabase
+python-dotenv
