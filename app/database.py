@@ -13,8 +13,22 @@ def get_db_connection():
             host="127.0.0.1",
             user="root",
             password="root",
-            database="projetofinal2"
+            database="projetofinal2"  # use the correct database name
         )
+        # ensure_called_table has mensagem_id column
+        try:
+            temp_cursor = conn.cursor()
+            temp_cursor.execute("SHOW COLUMNS FROM chamados_midia LIKE 'mensagem_id'")
+            if not temp_cursor.fetchone():
+                temp_cursor.execute("ALTER TABLE chamados_midia ADD COLUMN mensagem_id INT NULL")
+                temp_cursor.execute(
+                    "ALTER TABLE chamados_midia ADD CONSTRAINT fk_mensagem FOREIGN KEY (mensagem_id) REFERENCES chamados_mensagens(id) ON DELETE CASCADE"
+                )
+                conn.commit()
+            temp_cursor.close()
+        except Exception:
+            # ignore if table doesn't exist yet
+            pass
         # Entrega a conexão para a requisição atual
         yield conn
         
