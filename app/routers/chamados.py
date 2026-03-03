@@ -4,11 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from ..models import ChamadoCreate, ChamadoOut, MensagemCreate
 from ..auth import get_current_user
 from ..database import get_db_cursor, get_db_connection
+from ..supabase_storage import upload_file_to_supabase, delete_file_from_supabase
+import traceback
 
 router = APIRouter(prefix="/chamados", tags=["Chamados"])
-
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', 'uploads')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.get("")
@@ -67,35 +66,35 @@ def create_chamado_json(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_chamado(
-    chamado: str = Form(...),
-    files: Optional[List[UploadFile]] = File(None),
+    title: str = Form(..., description="Título do chamado"),
+    description: str = Form(..., description="Descrição detalhada do problema"),
+    files: List[UploadFile] = File(default=[], description="Arquivos anexos (opcional)"),
     current_user: dict = Depends(get_current_user),
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
-    # `chamado` is received as a JSON string in multipart/form-data. Parse to model.
-    import json
-    try:
-        chamado_data = json.loads(chamado)
-    except Exception:
-        raise HTTPException(status_code=422, detail="Invalid JSON in 'chamado' form field")
-
-    # Validate/construct Pydantic model
-    try:
-        chamado_obj = ChamadoCreate(**chamado_data)
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
+    """Create chamado with optional file attachments using Supabase Storage
+    
+    Similar to /json endpoint but accepts FormData for multipart uploads.
+    Use this for uploading files together with the chamado.
+    """
     user_id = current_user.get('id')
 
-    import traceback
+    # sanitize files param (Swagger may send empty string or a list containing a string)
+    if isinstance(files, str):
+        files = []
+    elif isinstance(files, list):
+        files = [f for f in files if not isinstance(f, str)]
+
     try:
+        # Insert chamado in database
         cursor.execute(
             "INSERT INTO chamados (titulo, descricao, user_id, status_id, prioridade_id, created_at) VALUES (%s, %s, %s, %s, %s, NOW())",
-            (chamado_obj.title, chamado_obj.description, user_id, 1, 2)
+            (title, description, user_id, 1, 2)
         )
         conn.commit()
 
+        # Get chamado ID
         chamado_id = None
         try:
             chamado_id = cursor.lastrowid
@@ -106,38 +105,41 @@ def create_chamado(
         if not chamado_id:
             cursor.execute(
                 "SELECT id FROM chamados WHERE titulo = %s AND user_id = %s ORDER BY created_at DESC LIMIT 1",
-                (chamado_obj.title, user_id)
+                (title, user_id)
             )
             row = cursor.fetchone()
             chamado_id = row['id'] if row else None
 
-        # Save attachments
+        # Upload attachments to Supabase Storage
         if files:
             for upload in files:
-                # ensure UploadFile type
                 try:
-                    filename = f"{chamado_id}_{upload.filename}" if chamado_id else upload.filename
-                    path = os.path.join(UPLOAD_DIR, filename)
-                    with open(path, "wb") as f:
-                        f.write(upload.file.read())
+                    # Upload file to Supabase
+                    file_info = upload_file_to_supabase(upload, chamado_id)
+                    
+                    # Save metadata in database
                     cursor.execute(
                         "INSERT INTO chamados_midia (chamado_id, url_arquivo, tipo_arquivo) VALUES (%s, %s, %s)",
-                        (chamado_id, path, upload.content_type)
+                        (chamado_id, file_info['url'], file_info['content_type'])
                     )
                 except Exception as e:
-                    # rollback file-related DB inserts if something fails
-                    print("Error saving uploaded file:", e)
+                    print("Error uploading file to Supabase:", str(e))
                     traceback.print_exc()
-                    raise HTTPException(status_code=500, detail=f"Error saving attachment: {str(e)}")
+                    raise HTTPException(status_code=500, detail=f"Error uploading attachment: {str(e)}")
+            
             conn.commit()
 
-        return {"message": "Chamado criado", "id": chamado_id}
+        return {
+            "message": "Chamado criado com sucesso",
+            "id": chamado_id,
+            "files_uploaded": len(files) if files else 0
+        }
+    except HTTPException:
+        raise
     except Exception as e:
-        # Print traceback to server logs for debugging; return 500 with safe message
-        import sys
-        print("Error creating chamado:")
-        traceback.print_exc(file=sys.stdout)
-        raise HTTPException(status_code=500, detail=f"Internal server error creating chamado: {str(e)}")
+        print("Error creating chamado:", str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/{chamado_id}")
@@ -186,16 +188,81 @@ def list_mensagens(chamado_id: int, current_user: dict = Depends(get_current_use
 
 
 @router.post("/{chamado_id}/mensagens", status_code=status.HTTP_201_CREATED)
-def post_mensagem(chamado_id: int, mensagem: MensagemCreate, current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor), conn = Depends(get_db_connection)):
+def post_mensagem(
+    chamado_id: int,
+    mensagem: str = Form(..., description="Conteúdo da mensagem/resposta"),
+    files: Optional[List[UploadFile]] = File(default=None, description="Arquivos anexos (opcional)"),
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection)
+):
+    """Post message with optional file attachments using Supabase Storage"""
     # Verify chamado exists
     cursor.execute("SELECT id FROM chamados WHERE id = %s", (chamado_id,))
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
     
     user_id = current_user.get('id')
-    cursor.execute(
-        "INSERT INTO chamados_mensagens (chamado_id, user_id, mensagem, enviado_em) VALUES (%s, %s, %s, NOW())",
-        (chamado_id, user_id, mensagem.content)
-    )
-    conn.commit()
-    return {"message": "Mensagem enviada"}
+    
+    # Tratamento corrigido para lidar com nulos e strings vazias do Swagger
+    if files is None:
+        files = []
+    elif isinstance(files, str):
+        files = []
+    elif isinstance(files, list):
+        files = [f for f in files if not isinstance(f, str)]
+    
+    try:
+        # Insert message in database
+        cursor.execute(
+            "INSERT INTO chamados_mensagens (chamado_id, user_id, mensagem, enviado_em) VALUES (%s, %s, %s, NOW())",
+            (chamado_id, user_id, mensagem)
+        )
+        conn.commit()
+
+        # Get mensagem ID
+        mensagem_id = None
+        try:
+            mensagem_id = cursor.lastrowid
+        except Exception:
+            mensagem_id = None
+
+        # Fallback: find the inserted row if lastrowid not available
+        if not mensagem_id:
+            cursor.execute(
+                "SELECT id FROM chamados_mensagens WHERE chamado_id = %s AND user_id = %s ORDER BY enviado_em DESC LIMIT 1",
+                (chamado_id, user_id)
+            )
+            row = cursor.fetchone()
+            mensagem_id = row['id'] if row else None
+
+        # Upload attachments to Supabase Storage if provided
+        if files:
+            for upload in files:
+                try:
+                    # Upload file to Supabase
+                    file_info = upload_file_to_supabase(upload, chamado_id, mensagem_id)
+                    
+                    # Save metadata in database
+                    cursor.execute(
+                        "INSERT INTO chamados_midia (chamado_id, mensagem_id, url_arquivo, tipo_arquivo) VALUES (%s, %s, %s, %s)",
+                        (chamado_id, mensagem_id, file_info['url'], file_info['content_type'])
+                    )
+                except Exception as e:
+                    print("Error uploading file to Supabase:", str(e))
+                    traceback.print_exc()
+                    raise HTTPException(status_code=500, detail=f"Error uploading attachment: {str(e)}")
+            
+            conn.commit()
+
+        return {
+            "message": "Mensagem enviada com sucesso",
+            "mensagem_id": mensagem_id,
+            "files_uploaded": len(files) if files else 0
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Error posting mensagem:", str(e))
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

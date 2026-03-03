@@ -36,16 +36,33 @@ def update_user(
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided to update")
 
+    # --- INÍCIO DA CORREÇÃO ---
+    # Mapeamento: "Chave do Pydantic": "Coluna no Banco de Dados"
+    key_mapping = {
+        "name": "nome",
+        "user_type": "cargo"
+        # Adicione outros campos aqui se precisar (ex: "last_name": "sobrenome")
+    }
+
+    # Traduz as chaves para os nomes corretos do banco de dados
+    for py_key, db_col in key_mapping.items():
+        if py_key in update_data:
+            update_data[db_col] = update_data.pop(py_key)
+
+    # O tratamento da senha continua o mesmo
     if "password" in update_data:
-        # hash responsibility remains in auth utilities; import to use if needed elsewhere
         from ..auth import generate_hash
         update_data["senha"] = generate_hash(update_data.pop("password"))
+    # --- FIM DA CORREÇÃO ---
 
+    # Agora as chaves do update_data estão em português (nome, cargo, senha)
     set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
     values = list(update_data.values())
     values.append(email)
 
     query = f"UPDATE users SET {set_clause} WHERE email = %s"
+    
+    # Executa e commita
     cursor.execute(query, tuple(values))
     conn.commit()
 

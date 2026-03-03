@@ -8,3 +8,8 @@ python-jose[cryptography]
 python-multipart
 requests
 pydantic[email]
+<<<<<<< HEAD
+=======
+supabase
+python-dotenv
+>>>>>>> 3e7fa55a96f50a76c7ed2a4286a1dfb517769964
