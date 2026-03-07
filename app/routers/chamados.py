@@ -9,18 +9,138 @@ import traceback
 
 router = APIRouter(prefix="/chamados", tags=["Chamados"])
 
+# ──── Helper functions ────────────────────────────
+def get_priority_id(priority: str) -> int:
+    """Map priority string to priority ID"""
+    priority_map = {
+        'low': 1,
+        'medium': 2,
+        'high': 3,
+        'urgent': 4
+    }
+    return priority_map.get(priority.lower(), 2)  # Default to medium
+
+def get_category_id(category: str, cursor, conn) -> int:
+    """Get category ID by name, creating it if it doesn't exist"""
+    try:
+        # Try to find the exact category
+        cursor.execute("SELECT id FROM categorias WHERE nome = %s", (category,))
+        result = cursor.fetchone()
+        if result:
+            return result['id']
+        
+        # If category doesn't exist, create it
+        cursor.execute("INSERT INTO categorias (nome) VALUES (%s)", (category,))
+        conn.commit()
+        return cursor.lastrowid
+    except Exception as e:
+        print(f"Error getting category ID: {str(e)}")
+        # Try fallback to 'Outros'
+        try:
+            cursor.execute("SELECT id FROM categorias WHERE nome = 'Outros'")
+            result = cursor.fetchone()
+            if result:
+                return result['id']
+            # If 'Outros' doesn't exist, create it
+            cursor.execute("INSERT INTO categorias (nome) VALUES (%s)", ('Outros',))
+            conn.commit()
+            return cursor.lastrowid
+        except Exception as fallback_error:
+            raise HTTPException(status_code=500, detail=f"Error processing category: {str(fallback_error)}")
+
+def get_attachments_for_chamado(chamado_id, cursor) -> list:
+    """Get attachments for a chamado from chamados_midia table (excluding message files)"""
+    try:
+        cursor.execute(
+            "SELECT id, url_arquivo as url, tipo_arquivo as type FROM chamados_midia WHERE chamado_id = %s AND mensagem_id IS NULL", 
+            (chamado_id,)
+        )
+        arquivos = cursor.fetchall()
+        
+        attachments = []
+        for arquivo in arquivos:
+            # Extract filename from URL or use generic name
+            url_parts = arquivo['url'].split('/')
+            filename = url_parts[-1] if url_parts else f"arquivo_{arquivo['id']}"
+            attachments.append({
+                'id': str(arquivo['id']),
+                'url': arquivo['url'],
+                'name': filename,
+                'type': arquivo['type']
+            })
+        return attachments
+    except Exception as e:
+        print(f"Error getting attachments: {str(e)}")
+        return []
+
+
+# ──── Message helpers ───────────────────────────────
+
+def get_attachments_for_mensagem(mensagem_id, cursor) -> list:
+    """Get attachments associated with a specific mensagem_id"""
+    try:
+        cursor.execute(
+            "SELECT id, url_arquivo as url, tipo_arquivo as type FROM chamados_midia WHERE mensagem_id = %s", 
+            (mensagem_id,)
+        )
+        arquivos = cursor.fetchall()
+        attachments = []
+        for arquivo in arquivos:
+            url_parts = arquivo['url'].split('/')
+            filename = url_parts[-1] if url_parts else f"arquivo_{arquivo['id']}"
+            attachments.append({
+                'id': str(arquivo['id']),
+                'url': arquivo['url'],
+                'name': filename,
+                'type': arquivo['type']
+            })
+        return attachments
+    except Exception as e:
+        print(f"Error getting message attachments: {str(e)}")
+        return []
+
+
+def get_chamado_with_access_check(chamado_id: int, current_user: dict, cursor) -> dict:
+    """Return chamado row if user can access it, otherwise raise HTTPException."""
+    cursor.execute("SELECT id, user_id FROM chamados WHERE id = %s", (chamado_id,))
+    chamado = cursor.fetchone()
+    if not chamado:
+        raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
+
+    user_cargo = current_user.get('cargo')
+    user_id = current_user.get('id')
+    if user_cargo not in ('admin', 'tecnico') and chamado.get('user_id') != user_id:
+        raise HTTPException(status_code=403, detail="Você não tem permissão para acessar este chamado")
+
+    return chamado
+
+# ──────────────────────────────────────────────────
+
 
 @router.get("")
 def list_chamados(current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor)):
     user_id = current_user.get('id')
     user_cargo = current_user.get('cargo')
 
-    if user_cargo in ('admin', 'tecnico'):
-        cursor.execute("SELECT * FROM chamados")
-    else:
-        cursor.execute("SELECT * FROM chamados WHERE user_id = %s", (user_id,))
+    base_query = (
+        "SELECT c.*, LOWER(u.email) AS user_email, cat.nome AS categoria "
+        "FROM chamados c "
+        "LEFT JOIN users u ON u.id = c.user_id "
+        "LEFT JOIN categorias cat ON cat.id = c.categoria_id"
+    )
 
-    return cursor.fetchall()
+    if user_cargo in ('admin', 'tecnico'):
+        cursor.execute(base_query)
+    else:
+        cursor.execute(f"{base_query} WHERE c.user_id = %s", (user_id,))
+
+    chamados = cursor.fetchall()
+    
+    # Add attachments to each chamado
+    for chamado in chamados:
+        chamado['attachments'] = get_attachments_for_chamado(chamado['id'], cursor)
+    
+    return chamados
 
 
 @router.post("/json", status_code=status.HTTP_201_CREATED)
@@ -34,9 +154,13 @@ def create_chamado_json(
     user_id = current_user.get('id')
 
     try:
+        # Get priority and category IDs
+        priority_id = get_priority_id(chamado.priority)
+        category_id = get_category_id(chamado.category, cursor, conn)
+
         cursor.execute(
-            "INSERT INTO chamados (titulo, descricao, user_id, status_id, prioridade_id, created_at) VALUES (%s, %s, %s, %s, %s, NOW())",
-            (chamado.title, chamado.description, user_id, 1, 2)
+            "INSERT INTO chamados (titulo, descricao, user_id, categoria_id, status_id, prioridade_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+            (chamado.title, chamado.description, user_id, category_id, 1, priority_id)
         )
         conn.commit()
 
@@ -68,6 +192,8 @@ def create_chamado_json(
 def create_chamado(
     title: str = Form(..., description="Título do chamado"),
     description: str = Form(..., description="Descrição detalhada do problema"),
+    priority: str = Form("medium", description="Prioridade: low, medium, high, urgent"),
+    category: str = Form("Outros", description="Categoria do chamado"),
     files: List[UploadFile] = File(default=[], description="Arquivos anexos (opcional)"),
     current_user: dict = Depends(get_current_user),
     cursor = Depends(get_db_cursor),
@@ -87,10 +213,14 @@ def create_chamado(
         files = [f for f in files if not isinstance(f, str)]
 
     try:
+        # Get priority and category IDs
+        priority_id = get_priority_id(priority)
+        category_id = get_category_id(category, cursor, conn)
+
         # Insert chamado in database
         cursor.execute(
-            "INSERT INTO chamados (titulo, descricao, user_id, status_id, prioridade_id, created_at) VALUES (%s, %s, %s, %s, %s, NOW())",
-            (title, description, user_id, 1, 2)
+            "INSERT INTO chamados (titulo, descricao, user_id, categoria_id, status_id, prioridade_id, created_at) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+            (title, description, user_id, category_id, 1, priority_id)
         )
         conn.commit()
 
@@ -144,15 +274,13 @@ def create_chamado(
 
 @router.get("/{chamado_id}")
 def get_chamado(chamado_id: int, current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor)):
+    get_chamado_with_access_check(chamado_id, current_user, cursor)
+
     cursor.execute("SELECT * FROM chamados WHERE id = %s", (chamado_id,))
     chamado = cursor.fetchone()
-    if not chamado:
-        raise HTTPException(status_code=404, detail="Chamado not found")
 
-    # Attachments
-    cursor.execute("SELECT id, url_arquivo, tipo_arquivo FROM chamados_midia WHERE chamado_id = %s", (chamado_id,))
-    arquivos = cursor.fetchall()
-    chamado['midia'] = arquivos
+    # Get attachments using helper function
+    chamado['attachments'] = get_attachments_for_chamado(chamado_id, cursor)
     return chamado
 
 
@@ -178,29 +306,42 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
 
 @router.get("/{chamado_id}/mensagens")
 def list_mensagens(chamado_id: int, current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor)):
-    # Verify chamado exists
-    cursor.execute("SELECT id FROM chamados WHERE id = %s", (chamado_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
+    get_chamado_with_access_check(chamado_id, current_user, cursor)
     
-    cursor.execute("SELECT id, chamado_id, user_id, mensagem, enviado_em FROM chamados_mensagens WHERE chamado_id = %s ORDER BY enviado_em", (chamado_id,))
-    return cursor.fetchall()
+    # Join with users to fetch author name and email
+    cursor.execute(
+        "SELECT m.id, m.chamado_id, m.user_id, u.nome AS author_name, LOWER(u.email) AS author_email, m.mensagem, m.enviado_em, m.is_internal "
+        "FROM chamados_mensagens m "
+        "LEFT JOIN users u ON u.id = m.user_id "
+        "WHERE m.chamado_id = %s "
+        "ORDER BY m.enviado_em",
+        (chamado_id,)
+    )
+    mensagens = cursor.fetchall()
+
+    # Attach attachments for each message
+    for msg in mensagens:
+        msg['attachments'] = get_attachments_for_mensagem(msg['id'], cursor)
+
+    return mensagens
 
 
 @router.post("/{chamado_id}/mensagens", status_code=status.HTTP_201_CREATED)
 def post_mensagem(
     chamado_id: int,
     mensagem: str = Form(..., description="Conteúdo da mensagem/resposta"),
+    is_internal: bool = Form(False, description="Se a mensagem é interna (visível apenas para TI)"),
     files: Optional[List[UploadFile]] = File(default=None, description="Arquivos anexos (opcional)"),
     current_user: dict = Depends(get_current_user),
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
     """Post message with optional file attachments using Supabase Storage"""
-    # Verify chamado exists
-    cursor.execute("SELECT id FROM chamados WHERE id = %s", (chamado_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
+    get_chamado_with_access_check(chamado_id, current_user, cursor)
+
+    user_cargo = current_user.get('cargo')
+    if is_internal and user_cargo not in ('admin', 'tecnico'):
+        raise HTTPException(status_code=403, detail="Apenas a equipe de TI pode enviar mensagens internas")
     
     user_id = current_user.get('id')
     
@@ -215,8 +356,8 @@ def post_mensagem(
     try:
         # Insert message in database
         cursor.execute(
-            "INSERT INTO chamados_mensagens (chamado_id, user_id, mensagem, enviado_em) VALUES (%s, %s, %s, NOW())",
-            (chamado_id, user_id, mensagem)
+            "INSERT INTO chamados_mensagens (chamado_id, user_id, mensagem, enviado_em, is_internal) VALUES (%s, %s, %s, NOW(), %s)",
+            (chamado_id, user_id, mensagem, is_internal)
         )
         conn.commit()
 

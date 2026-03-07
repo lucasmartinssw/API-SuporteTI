@@ -43,4 +43,11 @@ def login(userLogin: UserLogin, cursor = Depends(get_db_cursor)):
     expires_delta = timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES)
     token = create_token(data={"sub": user_data['email']}, expires_delta=expires_delta)
 
-    return {"message": "Usuário logado com sucesso!", "token": token, "token_type": "bearer"}
+    return {
+        "message": "Usuário logado com sucesso!",
+        "token": token,
+        "token_type": "bearer",
+        "name": user_data['nome'],
+        "user_type": user_data['cargo'],
+        "email": user_data['email']
+    }

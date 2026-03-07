@@ -13,11 +13,12 @@ def get_db_connection():
             host="127.0.0.1",
             user="root",
             password="root",
-            database="projetofinal2"  # use the correct database name
+            database="projetofinal"  # use the correct database name
         )
         # ensure_called_table has mensagem_id column
         try:
             temp_cursor = conn.cursor()
+            # ensure chamados_midia has mensagem_id column (for attachments on messages)
             temp_cursor.execute("SHOW COLUMNS FROM chamados_midia LIKE 'mensagem_id'")
             if not temp_cursor.fetchone():
                 temp_cursor.execute("ALTER TABLE chamados_midia ADD COLUMN mensagem_id INT NULL")
@@ -25,9 +26,16 @@ def get_db_connection():
                     "ALTER TABLE chamados_midia ADD CONSTRAINT fk_mensagem FOREIGN KEY (mensagem_id) REFERENCES chamados_mensagens(id) ON DELETE CASCADE"
                 )
                 conn.commit()
+
+            # ensure chamados_mensagens has is_internal flag
+            temp_cursor.execute("SHOW COLUMNS FROM chamados_mensagens LIKE 'is_internal'")
+            if not temp_cursor.fetchone():
+                temp_cursor.execute("ALTER TABLE chamados_mensagens ADD COLUMN is_internal BOOLEAN DEFAULT FALSE")
+                conn.commit()
+
             temp_cursor.close()
         except Exception:
-            # ignore if table doesn't exist yet
+            # ignore if table doesn't exist yet or other errors
             pass
         # Entrega a conexão para a requisição atual
         yield conn
