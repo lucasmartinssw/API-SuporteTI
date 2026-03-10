@@ -1,72 +1,58 @@
-import bcrypt
-import hashlib
-from datetime import timedelta, datetime, timezone
-from jose import jwt, JWTError
-from fastapi import HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from datetime import datetime, timedelta
+from jose import jwt
+from passlib.context import CryptContext
+from fastapi import HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
+import mysql.connector
 
-from .config import SECRET_KEY, ALGORITHM
-from .database import get_db_cursor 
+from app.config import SECRET_KEY, ALGORITHM
 
-# 1. Trocamos o OAuth2PasswordBearer pelo HTTPBearer
-security = HTTPBearer()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-def get_user_by_email(email: str, cursor):
-    """Busca o usuário no banco pelo email."""
-    cursor.execute("SELECT id, nome, email, senha, cargo, created_at FROM users WHERE email = %s", (email,))
-    return cursor.fetchone()
 
-def pre_processar_senha(password: str) -> str:
-    """Garante que qualquer senha vire um hash de 64 caracteres antes do Bcrypt."""
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+def generate_hash(password: str):
+    return pwd_context.hash(password)
 
-def generate_hash(password: str) -> str:
-    senha_segura = pre_processar_senha(password)
-    salt = bcrypt.gensalt()
-    hashed_bytes = bcrypt.hashpw(senha_segura.encode('utf-8'), salt)
-    return hashed_bytes.decode('utf-8')
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    senha_segura = pre_processar_senha(plain_password)
-    try:
-        return bcrypt.checkpw(
-            senha_segura.encode('utf-8'), 
-            hashed_password.encode('utf-8')
-        )
-    except (ValueError, TypeError):
-        return False
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
 
 def create_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + expires_delta
-    to_encode.update({"iat": datetime.now(timezone.utc), "exp": expire})
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# 2. Atualizamos a dependência para receber o HTTPAuthorizationCredentials
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security), 
-    cursor = Depends(get_db_cursor)
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail='Could not validate credentials',
-        headers={"WWW-Authenticate": "Bearer"}
-    )
-    
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        # 3. Extraímos o token de dentro do objeto credentials
-        token = credentials.credentials
-        
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
+        email = payload.get("sub")
+
         if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+            raise HTTPException(status_code=401, detail="Invalid token")
 
-    user = get_user_by_email(email=email, cursor=cursor)
-    
-    if user is None:
-        raise credentials_exception
+        # Fetch full user dict from DB so routes can access id, cargo, etc.
+        conn = mysql.connector.connect(
+            host="127.0.0.1",
+            user="root",
+            password="root",
+            database="projetofinal"
+        )
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, nome, email, cargo FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
 
-    return user
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")

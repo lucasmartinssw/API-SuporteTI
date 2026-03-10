@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from ..models import User, UserUpdate
-from ..auth import get_current_user
-from ..database import get_db_cursor, get_db_connection
+from app.models import User, UserUpdate
+from app.auth import get_current_user
+from app.database import get_db_cursor, get_db_connection
 
 router = APIRouter(prefix="/users", tags=["Usuarios"])
 
@@ -51,7 +51,7 @@ def update_user(
 
     # O tratamento da senha continua o mesmo
     if "password" in update_data:
-        from ..auth import generate_hash
+        from app.auth import generate_hash
         update_data["senha"] = generate_hash(update_data.pop("password"))
     # --- FIM DA CORREÇÃO ---
 

@@ -27,6 +27,8 @@ class UserUpdate(BaseModel):
 class ChamadoCreate(BaseModel):
     title: str
     description: str
+    priority: str = "medium"  # 'low', 'medium', 'high', 'urgent'
+    category: str = "Outros"  # Category name
 
 
 class ChamadoOut(BaseModel):

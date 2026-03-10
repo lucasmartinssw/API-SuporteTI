@@ -13,7 +13,7 @@ def get_db_connection():
             host="127.0.0.1",
             user="root",
             password="root",
-            database="projetofinal2"  # use the correct database name
+            database="projetofinal"  # use the correct database name
         )
         # ensure_called_table has mensagem_id column
         try:

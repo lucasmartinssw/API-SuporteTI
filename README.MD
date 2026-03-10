@@ -15,3 +15,17 @@ pip install -r "requirements.txt"
 ```sh
 python -m uvicorn app.main:app --reload
 ```
+**User test**
+{
+  "name": "Teste Usuario",
+  "email": "usuario@teste.com",
+  "password": "123456",
+  "user_type": "usuario"
+}
+**admin test**
+{
+  "name": "Teste Admin",
+  "email": "admin@teste.com",
+  "password": "123456",
+  "user_type": "tecnico"
+}

@@ -88,6 +88,29 @@ INSERT INTO categorias (id, nome) VALUES
   (1, 'Geral');
   
   
+CREATE TABLE ativos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(100) NOT NULL,
+  tipo ENUM('computador','monitor','impressora','telefone','servidor','switch','outro') NOT NULL,
+  numero_serie VARCHAR(100),
+  patrimonio VARCHAR(50),
+  localizacao VARCHAR(100),
+  status ENUM('ativo','manutencao','reserva','desativado') DEFAULT 'ativo',
+  responsavel_id INT NULL,
+  observacoes TEXT,
+  created_at DATETIME DEFAULT NOW(),
+  updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+  FOREIGN KEY (responsavel_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE chamados_ativos (
+  chamado_id INT NOT NULL,
+  ativo_id INT NOT NULL,
+  PRIMARY KEY (chamado_id, ativo_id),
+  FOREIGN KEY (chamado_id) REFERENCES chamados(id) ON DELETE CASCADE,
+  FOREIGN KEY (ativo_id) REFERENCES ativos(id) ON DELETE CASCADE
+);
+
   SELECT * FROM prioridades;
 SELECT * FROM status_chamado;
 SELECT * FROM categorias;
