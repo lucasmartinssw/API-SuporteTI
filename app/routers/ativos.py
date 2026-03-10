@@ -1,19 +1,43 @@
-from typing import Optional, List
+from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, status
-from ..auth import get_current_user
-from ..database import get_db_cursor, get_db_connection
+from pydantic import BaseModel
+from app.auth import get_current_user
+from app.database import get_db_cursor, get_db_connection
 
 router = APIRouter(prefix="/ativos", tags=["Ativos"])
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── Pydantic models ───────────────────────────────────────────────────────────
+
+class AtivoCreate(BaseModel):
+    nome: str
+    tipo: str
+    numero_serie: Optional[str] = None
+    patrimonio: Optional[str] = None
+    localizacao: Optional[str] = None
+    status: Optional[str] = "ativo"
+    responsavel_id: Optional[int] = None
+    observacoes: Optional[str] = None
+
+class AtivoUpdate(BaseModel):
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    numero_serie: Optional[str] = None
+    patrimonio: Optional[str] = None
+    localizacao: Optional[str] = None
+    status: Optional[str] = None
+    responsavel_id: Optional[int] = None
+    observacoes: Optional[str] = None
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _require_tech(current_user: dict):
     if current_user.get("cargo") not in ("admin", "tecnico"):
         raise HTTPException(status_code=403, detail="Apenas técnicos ou admins podem gerenciar ativos.")
 
 
-# ── LIST ─────────────────────────────────────────────────────────────────────
+# ── LIST ──────────────────────────────────────────────────────────────────────
 
 @router.get("")
 def list_ativos(
@@ -23,12 +47,6 @@ def list_ativos(
     current_user: dict = Depends(get_current_user),
     cursor=Depends(get_db_cursor),
 ):
-    """
-    Lista todos os ativos.
-    Técnicos/admins veem tudo; usuários comuns veem apenas ativos
-    onde são o responsável.
-    Filtros opcionais: tipo, status, localizacao.
-    """
     base_query = """
         SELECT a.*, u.nome AS responsavel_nome, u.email AS responsavel_email
         FROM ativos a
@@ -39,7 +57,6 @@ def list_ativos(
 
     cargo = current_user.get("cargo")
     if cargo not in ("admin", "tecnico"):
-        # Regular users see all active assets (needed for ticket form dropdown)
         base_query += " AND a.status = 'ativo'"
 
     if tipo:
@@ -61,25 +78,15 @@ def list_ativos(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_ativo(
-    data: dict,
+    data: AtivoCreate,
     current_user: dict = Depends(get_current_user),
     cursor=Depends(get_db_cursor),
     conn=Depends(get_db_connection),
 ):
-    """
-    Registra um novo ativo de TI.
-    Requer: nome, tipo.
-    Opcionais: numero_serie, patrimonio, localizacao, status, responsavel_id, observacoes.
-    """
     _require_tech(current_user)
 
-    required = ("nome", "tipo")
-    for field in required:
-        if not data.get(field):
-            raise HTTPException(status_code=400, detail=f"Campo obrigatório ausente: {field}")
-
     valid_tipos = ("computador", "monitor", "impressora", "telefone", "servidor", "switch", "outro")
-    if data["tipo"] not in valid_tipos:
+    if data.tipo not in valid_tipos:
         raise HTTPException(status_code=400, detail=f"Tipo inválido. Valores aceitos: {valid_tipos}")
 
     cursor.execute(
@@ -89,14 +96,14 @@ def create_ativo(
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         """,
         (
-            data["nome"],
-            data["tipo"],
-            data.get("numero_serie"),
-            data.get("patrimonio"),
-            data.get("localizacao"),
-            data.get("status", "ativo"),
-            data.get("responsavel_id"),
-            data.get("observacoes"),
+            data.nome,
+            data.tipo,
+            data.numero_serie,
+            data.patrimonio,
+            data.localizacao,
+            data.status or "ativo",
+            data.responsavel_id,
+            data.observacoes,
         ),
     )
     conn.commit()
@@ -112,9 +119,6 @@ def get_ativo(
     current_user: dict = Depends(get_current_user),
     cursor=Depends(get_db_cursor),
 ):
-    """
-    Retorna detalhes de um ativo + histórico completo de chamados vinculados.
-    """
     cursor.execute(
         """
         SELECT a.*, u.nome AS responsavel_nome, u.email AS responsavel_email
@@ -128,7 +132,6 @@ def get_ativo(
     if not ativo:
         raise HTTPException(status_code=404, detail="Ativo não encontrado.")
 
-    # Ticket history for this asset
     cursor.execute(
         """
         SELECT c.id, c.titulo, c.descricao, c.created_at, c.updated_at,
@@ -153,25 +156,18 @@ def get_ativo(
 @router.patch("/{ativo_id}")
 def update_ativo(
     ativo_id: int,
-    data: dict,
+    data: AtivoUpdate,
     current_user: dict = Depends(get_current_user),
     cursor=Depends(get_db_cursor),
     conn=Depends(get_db_connection),
 ):
-    """
-    Atualiza campos de um ativo: nome, tipo, numero_serie, patrimonio,
-    localizacao, status, responsavel_id, observacoes.
-    """
     _require_tech(current_user)
 
     cursor.execute("SELECT id FROM ativos WHERE id = %s", (ativo_id,))
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Ativo não encontrado.")
 
-    allowed = {
-        k: v for k, v in data.items()
-        if k in ("nome", "tipo", "numero_serie", "patrimonio", "localizacao", "status", "responsavel_id", "observacoes")
-    }
+    allowed = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
     if not allowed:
         raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar.")
 
@@ -182,7 +178,7 @@ def update_ativo(
     return {"message": "Ativo atualizado com sucesso."}
 
 
-# ── DELETE (soft — sets status to desativado) ─────────────────────────────────
+# ── DELETE (soft) ─────────────────────────────────────────────────────────────
 
 @router.delete("/{ativo_id}")
 def deactivate_ativo(
@@ -197,9 +193,7 @@ def deactivate_ativo(
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Ativo não encontrado.")
 
-    cursor.execute(
-        "UPDATE ativos SET status = 'desativado', updated_at = NOW() WHERE id = %s", (ativo_id,)
-    )
+    cursor.execute("UPDATE ativos SET status = 'desativado', updated_at = NOW() WHERE id = %s", (ativo_id,))
     conn.commit()
     return {"message": "Ativo desativado com sucesso."}
 
@@ -214,7 +208,6 @@ def link_chamado(
     cursor=Depends(get_db_cursor),
     conn=Depends(get_db_connection),
 ):
-    """Vincula um chamado a um ativo."""
     _require_tech(current_user)
 
     cursor.execute("SELECT id FROM ativos WHERE id = %s", (ativo_id,))
@@ -244,7 +237,6 @@ def unlink_chamado(
     cursor=Depends(get_db_cursor),
     conn=Depends(get_db_connection),
 ):
-    """Remove vínculo entre chamado e ativo."""
     _require_tech(current_user)
     cursor.execute(
         "DELETE FROM chamados_ativos WHERE chamado_id = %s AND ativo_id = %s",

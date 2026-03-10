@@ -5,7 +5,7 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 import mysql.connector
 
-from app.config import SECRET_KEY, ALGORITHM
+from app.config import SECRET_KEY, ALGORITHM, HOST, USER, PASSWORD, DATABASE
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -34,12 +34,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        # Fetch full user dict from DB so routes can access id, cargo, etc.
+        # Parse host and port from HOST config (format: "127.0.0.1:3306")
+        host_parts = HOST.split(":")
+        db_host = host_parts[0]
+        db_port = int(host_parts[1]) if len(host_parts) > 1 else 3306
+
         conn = mysql.connector.connect(
-            host="127.0.0.1",
-            user="root",
-            password="root",
-            database="projetofinal"
+            host=db_host,
+            port=db_port,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE
         )
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT id, nome, email, cargo FROM users WHERE email = %s", (email,))
@@ -54,5 +59,5 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")

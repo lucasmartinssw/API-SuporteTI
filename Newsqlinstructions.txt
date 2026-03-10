@@ -111,6 +111,8 @@ CREATE TABLE chamados_ativos (
   FOREIGN KEY (ativo_id) REFERENCES ativos(id) ON DELETE CASCADE
 );
 
+ALTER TABLE chamados_mensagens ADD COLUMN is_internal BOOLEAN DEFAULT FALSE;
+
   SELECT * FROM prioridades;
 SELECT * FROM status_chamado;
 SELECT * FROM categorias;
