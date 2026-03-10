@@ -13,10 +13,14 @@ def test():
 
 @router.get("")
 def list_users(
+    cargo: str = None,
     current_user: dict = Depends(get_current_user),
     cursor = Depends(get_db_cursor)
 ):
-    cursor.execute("SELECT id, nome, email, cargo FROM users")
+    if cargo:
+        cursor.execute("SELECT id, nome, email, cargo FROM users WHERE cargo = %s", (cargo,))
+    else:
+        cursor.execute("SELECT id, nome, email, cargo FROM users")
     return cursor.fetchall()
 
 

@@ -112,6 +112,19 @@ CREATE TABLE IF NOT EXISTS chamados_midia (
 );
 
 -- ============================================================
+--  TICKET <-> TECHNICIAN LINK
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS chamados_tecnicos (
+  chamado_id  INT NOT NULL,
+  user_id     INT NOT NULL,
+  assigned_at DATETIME DEFAULT NOW(),
+  PRIMARY KEY (chamado_id, user_id),
+  FOREIGN KEY (chamado_id) REFERENCES chamados(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE
+);
+
+-- ============================================================
 --  TICKET <-> ASSET LINK
 -- ============================================================
 
@@ -145,6 +158,22 @@ INSERT IGNORE INTO categorias (id, nome) VALUES
   (4, 'Rede'),
   (5, 'Acesso'),
   (6, 'Outros');
+
+-- ============================================================
+--  NOTIFICATIONS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS notificacoes (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  user_id    INT NOT NULL,
+  tipo       ENUM('status_change','new_message','ticket_created') NOT NULL,
+  chamado_id INT NOT NULL,
+  mensagem   VARCHAR(255) NOT NULL,
+  lida       BOOLEAN DEFAULT FALSE,
+  created_at DATETIME DEFAULT NOW(),
+  FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
+  FOREIGN KEY (chamado_id) REFERENCES chamados(id) ON DELETE CASCADE
+);
 
 -- ============================================================
 --  VERIFY

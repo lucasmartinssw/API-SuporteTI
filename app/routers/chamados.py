@@ -5,6 +5,7 @@ from app.models import ChamadoCreate, ChamadoOut, MensagemCreate
 from app.auth import get_current_user
 from app.database import get_db_cursor, get_db_connection
 from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
+from app.routers.notificacoes import create_notificacao
 import traceback
 
 router = APIRouter(prefix="/chamados", tags=["Chamados"])
@@ -100,6 +101,22 @@ def get_attachments_for_mensagem(mensagem_id, cursor) -> list:
         return []
 
 
+
+
+def get_tecnicos_for_chamado(chamado_id: int, cursor) -> list:
+    """Get list of technicians assigned to a chamado."""
+    try:
+        cursor.execute(
+            "SELECT u.id, u.nome, LOWER(u.email) AS email FROM chamados_tecnicos ct "
+            "JOIN users u ON u.id = ct.user_id "
+            "WHERE ct.chamado_id = %s",
+            (chamado_id,)
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting tecnicos: {str(e)}")
+        return []
+
 def get_chamado_with_access_check(chamado_id: int, current_user: dict, cursor) -> dict:
     """Return chamado row if user can access it, otherwise raise HTTPException."""
     cursor.execute("SELECT id, user_id FROM chamados WHERE id = %s", (chamado_id,))
@@ -136,9 +153,10 @@ def list_chamados(current_user: dict = Depends(get_current_user), cursor = Depen
 
     chamados = cursor.fetchall()
     
-    # Add attachments to each chamado
+    # Add attachments and technicians to each chamado
     for chamado in chamados:
         chamado['attachments'] = get_attachments_for_chamado(chamado['id'], cursor)
+        chamado['tecnicos'] = get_tecnicos_for_chamado(chamado['id'], cursor)
     
     return chamados
 
@@ -178,6 +196,16 @@ def create_chamado_json(
             )
             row = cursor.fetchone()
             chamado_id = row['id'] if row else None
+
+        # Notify all technicians and admins
+        try:
+            cursor.execute("SELECT id FROM users WHERE cargo IN ('tecnico', 'admin')")
+            techs = cursor.fetchall()
+            for tech in techs:
+                create_notificacao(tech['id'], 'ticket_created', chamado_id,
+                    f"Novo chamado aberto: {chamado.title}", cursor, conn)
+        except Exception as ne:
+            print(f"Notification error: {ne}")
 
         return {"message": "Chamado criado", "id": chamado_id}
     except Exception as e:
@@ -276,31 +304,73 @@ def create_chamado(
 def get_chamado(chamado_id: int, current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor)):
     get_chamado_with_access_check(chamado_id, current_user, cursor)
 
-    cursor.execute("SELECT * FROM chamados WHERE id = %s", (chamado_id,))
+    cursor.execute(
+        "SELECT c.*, LOWER(u.email) AS user_email "
+        "FROM chamados c "
+        "LEFT JOIN users u ON u.id = c.user_id "
+        "WHERE c.id = %s",
+        (chamado_id,)
+    )
     chamado = cursor.fetchone()
 
-    # Get attachments using helper function
     chamado['attachments'] = get_attachments_for_chamado(chamado_id, cursor)
+    chamado['tecnicos'] = get_tecnicos_for_chamado(chamado_id, cursor)
     return chamado
 
 
 @router.patch("/{chamado_id}")
 def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get_current_user), cursor = Depends(get_db_cursor), conn = Depends(get_db_connection)):
     user_cargo = current_user.get('cargo')
-    if user_cargo not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=403, detail="Only technicians or admins can update chamados")
+    user_id = current_user.get('id')
 
-    # Allow only status_id and prioridade_id updates
-    allowed = {k: v for k, v in data.items() if k in ('status_id', 'prioridade_id')}
+    # Fetch chamado to check ownership
+    cursor.execute("SELECT user_id, status_id, titulo FROM chamados WHERE id = %s", (chamado_id,))
+    chamado = cursor.fetchone()
+    if not chamado:
+        raise HTTPException(status_code=404, detail="Chamado not found")
+
+    is_owner = chamado['user_id'] == user_id
+    is_tech = user_cargo in ('admin', 'tecnico')
+
+    # Users can only close (3) or reopen (1) their own tickets
+    if not is_tech:
+        if not is_owner:
+            raise HTTPException(status_code=403, detail="Sem permissão")
+        new_status = data.get('status_id')
+        if new_status not in (1, 3):
+            raise HTTPException(status_code=403, detail="Usuários só podem fechar ou reabrir chamados")
+        allowed = {'status_id': new_status}
+    else:
+        allowed = {k: v for k, v in data.items() if k in ('status_id', 'prioridade_id')}
+
     if not allowed:
         raise HTTPException(status_code=400, detail="No updatable fields provided")
 
     set_clause = ", ".join([f"{k} = %s" for k in allowed.keys()])
     values = list(allowed.values())
     values.append(chamado_id)
-    query = f"UPDATE chamados SET {set_clause}, updated_at = NOW() WHERE id = %s"
-    cursor.execute(query, tuple(values))
+    cursor.execute(f"UPDATE chamados SET {set_clause}, updated_at = NOW() WHERE id = %s", tuple(values))
     conn.commit()
+
+    # Send status change notification
+    if 'status_id' in allowed:
+        status_labels = {1: 'Aberto', 2: 'Em Atendimento', 3: 'Concluído', 4: 'Fechado'}
+        new_label = status_labels.get(allowed['status_id'], 'Atualizado')
+        try:
+            if is_tech:
+                # Notify the ticket owner
+                create_notificacao(chamado['user_id'], 'status_change', chamado_id,
+                    f"Seu chamado '{chamado['titulo']}' foi atualizado para: {new_label}", cursor, conn)
+            else:
+                # Notify all techs assigned to this ticket
+                cursor.execute(
+                    "SELECT user_id FROM chamados_tecnicos WHERE chamado_id = %s", (chamado_id,))
+                for row in cursor.fetchall():
+                    create_notificacao(row['user_id'], 'status_change', chamado_id,
+                        f"Chamado '{chamado['titulo']}' foi {new_label.lower()} pelo usuário", cursor, conn)
+        except Exception as ne:
+            print(f"Notification error: {ne}")
+
     return {"message": "Chamado updated"}
 
 
@@ -396,6 +466,24 @@ def post_mensagem(
             
             conn.commit()
 
+        # Notify the other party
+        try:
+            cursor.execute("SELECT user_id, titulo FROM chamados WHERE id = %s", (chamado_id,))
+            ch = cursor.fetchone()
+            if ch:
+                if is_tech:
+                    # Tech wrote — notify ticket owner
+                    create_notificacao(ch['user_id'], 'new_message', chamado_id,
+                        f"Nova resposta da equipe de TI no chamado '{ch['titulo']}'", cursor, conn)
+                else:
+                    # User wrote — notify assigned techs
+                    cursor.execute("SELECT user_id FROM chamados_tecnicos WHERE chamado_id = %s", (chamado_id,))
+                    for row in cursor.fetchall():
+                        create_notificacao(row['user_id'], 'new_message', chamado_id,
+                            f"Nova mensagem do usuário no chamado '{ch['titulo']}'", cursor, conn)
+        except Exception as ne:
+            print(f"Notification error: {ne}")
+
         return {
             "message": "Mensagem enviada com sucesso",
             "mensagem_id": mensagem_id,
@@ -407,3 +495,51 @@ def post_mensagem(
         print("Error posting mensagem:", str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.post("/{chamado_id}/tecnicos/{user_id}", status_code=status.HTTP_201_CREATED)
+def add_tecnico(
+    chamado_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection)
+):
+    """Assign a technician to a chamado."""
+    if current_user.get('cargo') not in ('admin', 'tecnico'):
+        raise HTTPException(status_code=403, detail="Only technicians or admins can assign technicians")
+    get_chamado_with_access_check(chamado_id, current_user, cursor)
+    # Check user exists and is a tech/admin
+    cursor.execute("SELECT id, cargo FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user['cargo'] not in ('admin', 'tecnico'):
+        raise HTTPException(status_code=400, detail="User is not a technician or admin")
+    try:
+        cursor.execute(
+            "INSERT IGNORE INTO chamados_tecnicos (chamado_id, user_id) VALUES (%s, %s)",
+            (chamado_id, user_id)
+        )
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "Técnico adicionado"}
+
+
+@router.delete("/{chamado_id}/tecnicos/{user_id}")
+def remove_tecnico(
+    chamado_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection)
+):
+    """Remove a technician from a chamado."""
+    if current_user.get('cargo') not in ('admin', 'tecnico'):
+        raise HTTPException(status_code=403, detail="Only technicians or admins can remove technicians")
+    cursor.execute(
+        "DELETE FROM chamados_tecnicos WHERE chamado_id = %s AND user_id = %s",
+        (chamado_id, user_id)
+    )
+    conn.commit()
+    return {"message": "Técnico removido"}
