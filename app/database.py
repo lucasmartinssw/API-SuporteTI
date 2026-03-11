@@ -12,7 +12,7 @@ def get_db_connection():
         conn = mysql.connector.connect(
             host="127.0.0.1",
             user="root",
-            password="User-12910",
+            password="root",
             database="projetofinal"  # use the correct database name
         )
         # ensure_called_table has mensagem_id column

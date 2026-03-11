@@ -269,6 +269,8 @@ def create_chamado(
             chamado_id = row['id'] if row else None
 
         # Upload attachments to Supabase Storage
+        upload_errors = []
+        files_uploaded = 0
         if files:
             for upload in files:
                 try:
@@ -280,18 +282,31 @@ def create_chamado(
                         "INSERT INTO chamados_midia (chamado_id, url_arquivo, tipo_arquivo) VALUES (%s, %s, %s)",
                         (chamado_id, file_info['url'], file_info['content_type'])
                     )
+                    files_uploaded += 1
                 except Exception as e:
                     print("Error uploading file to Supabase:", str(e))
                     traceback.print_exc()
-                    raise HTTPException(status_code=500, detail=f"Error uploading attachment: {str(e)}")
+                    upload_errors.append({
+                        "file_name": getattr(upload, "filename", "arquivo"),
+                        "error": str(e)
+                    })
             
             conn.commit()
 
-        return {
+        response = {
             "message": "Chamado criado com sucesso",
             "id": chamado_id,
-            "files_uploaded": len(files) if files else 0
+            "files_uploaded": files_uploaded,
+            "files_failed": len(upload_errors)
         }
+
+        if upload_errors:
+            response["warnings"] = [
+                "Um ou mais anexos falharam no upload. Configure SUPABASE_SERVICE_ROLE_KEY no .env para uploads via backend."
+            ]
+            response["upload_errors"] = upload_errors
+
+        return response
     except HTTPException:
         raise
     except Exception as e:

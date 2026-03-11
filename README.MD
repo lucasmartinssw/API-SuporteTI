@@ -23,7 +23,9 @@
    Edite o `.env` e preencha:
    - `PASSWORD` → sua senha do MySQL
    - `SECRET_KEY` → qualquer string, mas deve ser **igual em todos os computadores**
-   - `SUPABASE_URL` e `SUPABASE_KEY` → credenciais do Supabase (para anexos)
+   - `SUPABASE_URL` → URL do projeto Supabase
+   - `SUPABASE_SERVICE_ROLE_KEY` → chave de servidor (necessária para upload no Storage pelo backend)
+   - `SUPABASE_BUCKET` → nome do bucket (ex.: `chamados-file`)
 
 5. **Rode o projeto**
    ```sh
