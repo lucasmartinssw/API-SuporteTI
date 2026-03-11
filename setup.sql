@@ -159,6 +159,24 @@ INSERT IGNORE INTO categorias (id, nome) VALUES
   (5, 'Acesso'),
   (6, 'Outros');
 
+-- Ativos de exemplo (sem responsavel_id para funcionar sem usuários pré-cadastrados)
+INSERT IGNORE INTO ativos (id, nome, tipo, numero_serie, patrimonio, localizacao, status, observacoes) VALUES
+  (1,  'Desktop Dell OptiPlex 7090',    'computador',  'SN-DELL-7090-001',   'PAT-2024-001', 'Sala 101 - TI',          'ativo',      'Core i7, 16GB RAM, SSD 512GB'),
+  (2,  'Desktop Dell OptiPlex 7090',    'computador',  'SN-DELL-7090-002',   'PAT-2024-002', 'Sala 102 - Financeiro',  'ativo',      'Core i7, 16GB RAM, SSD 512GB'),
+  (3,  'Notebook Lenovo ThinkPad T14',  'computador',  'SN-LNVO-T14-001',   'PAT-2024-003', 'Home Office - Diretoria','ativo',      'Core i5, 8GB RAM, SSD 256GB'),
+  (4,  'Notebook HP ProBook 450 G8',    'computador',  'SN-HP-450G8-001',    'PAT-2024-004', 'Sala 103 - RH',          'manutencao', 'Tela com defeito, aguardando peça'),
+  (5,  'Monitor LG 24" IPS',            'monitor',     'SN-LG-24IPS-001',    'PAT-2024-005', 'Sala 101 - TI',          'ativo',      'Full HD, HDMI + DisplayPort'),
+  (6,  'Monitor LG 24" IPS',            'monitor',     'SN-LG-24IPS-002',    'PAT-2024-006', 'Sala 102 - Financeiro',  'ativo',      'Full HD, HDMI + DisplayPort'),
+  (7,  'Monitor Samsung 27" Curvo',     'monitor',     'SN-SAMS-27C-001',    'PAT-2024-007', 'Sala 201 - Diretoria',   'ativo',      'QHD, USB-C'),
+  (8,  'Impressora HP LaserJet Pro',    'impressora',  'SN-HP-LJ-PRO-001',  'PAT-2024-008', 'Corredor 1° andar',      'ativo',      'Rede Wi-Fi, duplex automático'),
+  (9,  'Impressora Epson EcoTank L3250','impressora',  'SN-EPSON-L3250-001', 'PAT-2024-009', 'Sala 102 - Financeiro',  'ativo',      'Jato de tinta, tanque de tinta'),
+  (10, 'Telefone IP Grandstream',       'telefone',    'SN-GS-GXP1625-001', 'PAT-2024-010', 'Recepção',               'ativo',      'Ramal 1001, PoE'),
+  (11, 'Telefone IP Grandstream',       'telefone',    'SN-GS-GXP1625-002', 'PAT-2024-011', 'Sala 201 - Diretoria',   'ativo',      'Ramal 1002, PoE'),
+  (12, 'Servidor Dell PowerEdge T340',  'servidor',    'SN-DELL-PE-T340-01', 'PAT-2024-012', 'Rack - Sala TI',         'ativo',      'Xeon E-2224, 32GB ECC, RAID 1'),
+  (13, 'Switch Cisco SG350-28',         'switch',      'SN-CISCO-SG350-001', 'PAT-2024-013', 'Rack - Sala TI',         'ativo',      '28 portas Gigabit, gerenciável'),
+  (14, 'Notebook Dell Latitude 5520',   'computador',  'SN-DELL-5520-001',   'PAT-2024-014', 'Estoque TI',             'reserva',    'Reserva para substituição'),
+  (15, 'Monitor Dell 22" HD',           'monitor',     'SN-DELL-22HD-001',   'PAT-2024-015', 'Estoque TI',             'desativado', 'Defeito na fonte, sem conserto');
+
 -- ============================================================
 --  NOTIFICATIONS
 -- ============================================================
