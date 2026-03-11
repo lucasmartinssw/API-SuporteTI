@@ -1,19 +1,26 @@
 import mysql.connector
 from fastapi import Depends, HTTPException, status
+from app.config import HOST, USER, PASSWORD, DATABASE
 
 def get_db_connection():
     """
     Cria uma nova conexão para cada requisição.
-    O 'yield' pausa a função, entrega a conexão para a rota usar, 
+    O 'yield' pausa a função, entrega a conexão para a rota usar,
     e o 'finally' garante que ela seja fechada mesmo se der erro na rota.
     """
+    # HOST pode incluir porta (ex: "127.0.0.1:3306") — separar se necessário
+    host_parts = HOST.split(":")
+    host = host_parts[0]
+    port = int(host_parts[1]) if len(host_parts) > 1 else 3306
+
     conn = None
     try:
         conn = mysql.connector.connect(
-            host="127.0.0.1",
-            user="root",
-            password="root",
-            database="projetofinal"  # use the correct database name
+            host=host,
+            port=port,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE
         )
         # ensure_called_table has mensagem_id column
         try:

@@ -568,3 +568,30 @@ def remove_tecnico(
     )
     conn.commit()
     return {"message": "Técnico removido"}
+
+
+@router.delete("/{chamado_id}/mensagens/{mensagem_id}")
+def delete_mensagem(
+    chamado_id: int,
+    mensagem_id: int,
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection)
+):
+    """Delete a message — admin only."""
+    if current_user.get('cargo') not in ('admin', 'tecnico'):
+        raise HTTPException(status_code=403, detail="Apenas técnicos e admins podem apagar mensagens")
+
+    # Verify message belongs to this chamado
+    cursor.execute(
+        "SELECT id FROM chamados_mensagens WHERE id = %s AND chamado_id = %s",
+        (mensagem_id, chamado_id)
+    )
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+
+    # Delete attached media first (FK constraint)
+    cursor.execute("DELETE FROM chamados_midia WHERE mensagem_id = %s", (mensagem_id,))
+    cursor.execute("DELETE FROM chamados_mensagens WHERE id = %s", (mensagem_id,))
+    conn.commit()
+    return {"message": "Mensagem apagada"}
