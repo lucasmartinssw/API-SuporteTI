@@ -6,6 +6,7 @@ from app.auth import get_current_user
 from app.database import get_db_cursor, get_db_connection
 from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 from app.routers.notificacoes import create_notificacao
+from app.routers.auditoria import log_auditoria
 import traceback
 
 router = APIRouter(prefix="/chamados", tags=["Chamados"])
@@ -316,6 +317,10 @@ def create_chamado(
         except Exception as ne:
             print(f"Notification error: {ne}")
 
+        # Audit log
+        log_auditoria('chamados', chamado_id, user_id, 'criado',
+            f"Chamado criado: {title}", cursor, conn)
+
         return response
     except HTTPException:
         raise
@@ -377,17 +382,16 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
     cursor.execute(f"UPDATE chamados SET {set_clause}, updated_at = NOW() WHERE id = %s", tuple(values))
     conn.commit()
 
-    # Send status change notification
+    # Send status/priority notifications and audit
+    actor_name = current_user.get('nome') or current_user.get('email', 'Usuário')
     if 'status_id' in allowed:
         status_labels = {1: 'Aberto', 2: 'Em Atendimento', 3: 'Concluído', 4: 'Fechado'}
         new_label = status_labels.get(allowed['status_id'], 'Atualizado')
         try:
             if is_tech:
-                # Notify the ticket owner
                 create_notificacao(chamado['user_id'], 'status_change', chamado_id,
                     f"Seu chamado '{chamado['titulo']}' foi atualizado para: {new_label}", cursor, conn)
             else:
-                # Notify all techs assigned to this ticket
                 cursor.execute(
                     "SELECT user_id FROM chamados_tecnicos WHERE chamado_id = %s", (chamado_id,))
                 for row in cursor.fetchall():
@@ -395,6 +399,14 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
                         f"Chamado '{chamado['titulo']}' foi {new_label.lower()} pelo usuário", cursor, conn)
         except Exception as ne:
             print(f"Notification error: {ne}")
+        log_auditoria('chamados', chamado_id, user_id, 'status_alterado',
+            f"Status alterado para '{new_label}' por {actor_name}", cursor, conn)
+
+    if 'prioridade_id' in allowed:
+        prio_labels = {1: 'Baixa', 2: 'Média', 3: 'Alta', 4: 'Urgente'}
+        new_prio = prio_labels.get(allowed['prioridade_id'], 'Atualizada')
+        log_auditoria('chamados', chamado_id, user_id, 'prioridade_alterada',
+            f"Prioridade alterada para '{new_prio}' por {actor_name}", cursor, conn)
 
     return {"message": "Chamado updated"}
 
@@ -548,6 +560,12 @@ def add_tecnico(
         conn.commit()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    cursor.execute("SELECT nome FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    tech_name = row['nome'] if row else f"#{user_id}"
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('chamados', chamado_id, current_user['id'], 'tecnico_adicionado',
+        f"{tech_name} adicionado por {actor}", cursor, conn)
     return {"message": "Técnico adicionado"}
 
 
@@ -567,6 +585,12 @@ def remove_tecnico(
         (chamado_id, user_id)
     )
     conn.commit()
+    cursor.execute("SELECT nome FROM users WHERE id = %s", (user_id,))
+    row = cursor.fetchone()
+    tech_name = row['nome'] if row else f"#{user_id}"
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('chamados', chamado_id, current_user['id'], 'tecnico_removido',
+        f"{tech_name} removido por {actor}", cursor, conn)
     return {"message": "Técnico removido"}
 
 
@@ -594,4 +618,7 @@ def delete_mensagem(
     cursor.execute("DELETE FROM chamados_midia WHERE mensagem_id = %s", (mensagem_id,))
     cursor.execute("DELETE FROM chamados_mensagens WHERE id = %s", (mensagem_id,))
     conn.commit()
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('chamados', chamado_id, current_user['id'], 'mensagem_apagada',
+        f"Mensagem #{mensagem_id} apagada por {actor}", cursor, conn)
     return {"message": "Mensagem apagada"}

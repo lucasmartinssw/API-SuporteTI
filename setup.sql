@@ -176,6 +176,24 @@ CREATE TABLE IF NOT EXISTS notificacoes (
 );
 
 -- ============================================================
+--  AUDIT LOG
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS auditoria (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  tabela      ENUM('chamados','ativos') NOT NULL,
+  registro_id INT NOT NULL,
+  user_id     INT NOT NULL,
+  acao        ENUM('criado','status_alterado','prioridade_alterada',
+                   'tecnico_adicionado','tecnico_removido','mensagem_apagada',
+                   'ativo_vinculado','ativo_desvinculado',
+                   'campo_alterado','desativado') NOT NULL,
+  detalhe     VARCHAR(255),
+  created_at  DATETIME DEFAULT NOW(),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ============================================================
 --  VERIFY
 -- ============================================================
 

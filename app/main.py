@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .routers import usuarios, auth_routes, chamados, ativos, notificacoes
+from .routers import usuarios, auth_routes, chamados, ativos, notificacoes, auditoria
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="API Final Project", description="API for Final Project", version="1.0")
@@ -22,3 +22,4 @@ app.include_router(usuarios.router)
 app.include_router(chamados.router)
 app.include_router(ativos.router)
 app.include_router(notificacoes.router)
+app.include_router(auditoria.router)

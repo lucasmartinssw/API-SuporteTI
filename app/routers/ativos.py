@@ -2,6 +2,7 @@ from typing import Optional, List, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.auth import get_current_user
+from app.routers.auditoria import log_auditoria
 from app.database import get_db_cursor, get_db_connection
 
 router = APIRouter(prefix="/ativos", tags=["Ativos"])
@@ -56,6 +57,7 @@ def list_ativos(
     params: list = []
 
     cargo = current_user.get("cargo")
+    # Regular users only see active assets; techs/admins see all unless filtered
     if cargo not in ("admin", "tecnico"):
         base_query += " AND a.status = 'ativo'"
 
@@ -71,7 +73,18 @@ def list_ativos(
 
     base_query += " ORDER BY a.created_at DESC"
     cursor.execute(base_query, tuple(params))
-    return cursor.fetchall()
+    ativos = cursor.fetchall()
+
+    # Attach chamados count to each ativo
+    for ativo in ativos:
+        cursor.execute(
+            "SELECT COUNT(*) AS total FROM chamados_ativos WHERE ativo_id = %s",
+            (ativo["id"],)
+        )
+        row = cursor.fetchone()
+        ativo["chamados_count"] = row["total"] if row else 0
+
+    return ativos
 
 
 # ── CREATE ────────────────────────────────────────────────────────────────────
@@ -108,6 +121,9 @@ def create_ativo(
     )
     conn.commit()
     ativo_id = cursor.lastrowid
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('ativos', ativo_id, current_user['id'], 'criado',
+        f"Ativo '{data.nome}' criado por {actor}", cursor, conn)
     return {"message": "Ativo criado com sucesso.", "id": ativo_id}
 
 
@@ -175,6 +191,14 @@ def update_ativo(
     values = list(allowed.values()) + [ativo_id]
     cursor.execute(f"UPDATE ativos SET {set_clause}, updated_at = NOW() WHERE id = %s", tuple(values))
     conn.commit()
+    actor = current_user.get('nome') or current_user.get('email', '')
+    changes = ", ".join(f"{k}={v}" for k, v in updates.items())
+    if 'status' in updates and updates['status'] == 'desativado':
+        log_auditoria('ativos', ativo_id, current_user['id'], 'desativado',
+            f"Ativo desativado por {actor}", cursor, conn)
+    else:
+        log_auditoria('ativos', ativo_id, current_user['id'], 'campo_alterado',
+            f"Campos alterados por {actor}: {changes}", cursor, conn)
     return {"message": "Ativo atualizado com sucesso."}
 
 
@@ -225,7 +249,11 @@ def link_chamado(
         conn.commit()
     except Exception:
         raise HTTPException(status_code=409, detail="Vínculo já existe.")
-
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('ativos', ativo_id, current_user['id'], 'ativo_vinculado',
+        f"Chamado #{chamado_id} vinculado por {actor}", cursor, conn)
+    log_auditoria('chamados', chamado_id, current_user['id'], 'ativo_vinculado',
+        f"Ativo #{ativo_id} vinculado por {actor}", cursor, conn)
     return {"message": "Chamado vinculado ao ativo."}
 
 
@@ -243,4 +271,9 @@ def unlink_chamado(
         (chamado_id, ativo_id),
     )
     conn.commit()
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('ativos', ativo_id, current_user['id'], 'ativo_desvinculado',
+        f"Chamado #{chamado_id} desvinculado por {actor}", cursor, conn)
+    log_auditoria('chamados', chamado_id, current_user['id'], 'ativo_desvinculado',
+        f"Ativo #{ativo_id} desvinculado por {actor}", cursor, conn)
     return {"message": "Vínculo removido."}
