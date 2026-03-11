@@ -306,6 +306,16 @@ def create_chamado(
             ]
             response["upload_errors"] = upload_errors
 
+        # Notify all technicians and admins
+        try:
+            cursor.execute("SELECT id FROM users WHERE cargo IN ('tecnico', 'admin')")
+            techs = cursor.fetchall()
+            for tech in techs:
+                create_notificacao(tech['id'], 'ticket_created', chamado_id,
+                    f"Novo chamado aberto: {title}", cursor, conn)
+        except Exception as ne:
+            print(f"Notification error: {ne}")
+
         return response
     except HTTPException:
         raise
@@ -486,7 +496,7 @@ def post_mensagem(
             cursor.execute("SELECT user_id, titulo FROM chamados WHERE id = %s", (chamado_id,))
             ch = cursor.fetchone()
             if ch:
-                if is_tech:
+                if user_cargo in ('admin', 'tecnico'):
                     # Tech wrote — notify ticket owner
                     create_notificacao(ch['user_id'], 'new_message', chamado_id,
                         f"Nova resposta da equipe de TI no chamado '{ch['titulo']}'", cursor, conn)
