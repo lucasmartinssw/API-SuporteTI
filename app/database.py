@@ -1,5 +1,6 @@
 import mysql.connector
 from fastapi import Depends, HTTPException, status
+from app.config import HOST, USER, PASSWORD, DATABASE
 
 def get_db_connection():
     """
@@ -9,11 +10,16 @@ def get_db_connection():
     """
     conn = None
     try:
+        # HOST pode vir como "127.0.0.1:3306" — separar host e porta
+        db_host = HOST.split(":")[0] if ":" in HOST else HOST
+        db_port = int(HOST.split(":")[1]) if ":" in HOST else 3306
+
         conn = mysql.connector.connect(
-            host="127.0.0.1",
-            user="root",
-            password="root",
-            database="projetofinal"  # use the correct database name
+            host=db_host,
+            port=db_port,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE
         )
         # ensure_called_table has mensagem_id column
         try:
