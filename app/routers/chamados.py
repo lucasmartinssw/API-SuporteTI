@@ -208,6 +208,11 @@ def create_chamado_json(
         except Exception as ne:
             print(f"Notification error: {ne}")
 
+        # Audit log
+        if chamado_id:
+            log_auditoria('chamados', chamado_id, user_id, 'criado',
+                f"Chamado criado: {chamado.title}", cursor, conn)
+
         return {"message": "Chamado criado", "id": chamado_id}
     except Exception as e:
         import traceback
@@ -580,6 +585,7 @@ def remove_tecnico(
     """Remove a technician from a chamado."""
     if current_user.get('cargo') not in ('admin', 'tecnico'):
         raise HTTPException(status_code=403, detail="Only technicians or admins can remove technicians")
+    get_chamado_with_access_check(chamado_id, current_user, cursor)
     cursor.execute(
         "DELETE FROM chamados_tecnicos WHERE chamado_id = %s AND user_id = %s",
         (chamado_id, user_id)

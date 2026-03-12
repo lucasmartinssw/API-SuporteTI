@@ -192,8 +192,8 @@ def update_ativo(
     cursor.execute(f"UPDATE ativos SET {set_clause}, updated_at = NOW() WHERE id = %s", tuple(values))
     conn.commit()
     actor = current_user.get('nome') or current_user.get('email', '')
-    changes = ", ".join(f"{k}={v}" for k, v in updates.items())
-    if 'status' in updates and updates['status'] == 'desativado':
+    changes = ", ".join(f"{k}={v}" for k, v in allowed.items())
+    if 'status' in allowed and allowed['status'] == 'desativado':
         log_auditoria('ativos', ativo_id, current_user['id'], 'desativado',
             f"Ativo desativado por {actor}", cursor, conn)
     else:

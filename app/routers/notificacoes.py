@@ -35,6 +35,21 @@ def list_notificacoes(
     return cursor.fetchall()
 
 
+@router.patch("/lida-todas")
+def mark_all_read(
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection)
+):
+    """Dismiss all notifications for the current user."""
+    cursor.execute(
+        "UPDATE notificacoes SET lida = TRUE WHERE user_id = %s",
+        (current_user.get('id'),)
+    )
+    conn.commit()
+    return {"message": "Todas notificações dispensadas"}
+
+
 @router.patch("/{notificacao_id}/lida")
 def mark_one_read(
     notificacao_id: int,
@@ -49,18 +64,3 @@ def mark_one_read(
     )
     conn.commit()
     return {"message": "Notificação dispensada"}
-
-
-@router.patch("/lida-todas")
-def mark_all_read(
-    current_user: dict = Depends(get_current_user),
-    cursor = Depends(get_db_cursor),
-    conn = Depends(get_db_connection)
-):
-    """Dismiss all notifications for the current user."""
-    cursor.execute(
-        "UPDATE notificacoes SET lida = TRUE WHERE user_id = %s",
-        (current_user.get('id'),)
-    )
-    conn.commit()
-    return {"message": "Todas notificações dispensadas"}
