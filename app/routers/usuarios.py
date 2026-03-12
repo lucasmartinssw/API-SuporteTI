@@ -24,6 +24,12 @@ def list_users(
     return cursor.fetchall()
 
 
+def _check_self_or_admin(current_user: dict, target_email: str):
+    """Permite apenas o próprio usuário ou um admin acessar/modificar."""
+    if current_user.get("cargo") != "admin" and current_user.get("email") != target_email:
+        raise HTTPException(status_code=403, detail="Sem permissão para modificar este usuário")
+
+
 @router.patch("/{email}")
 def update_user(
     email: str,
@@ -32,45 +38,42 @@ def update_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
+    _check_self_or_admin(current_user, email)
+
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     update_data = user_update.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(status_code=400, detail="No data provided to update")
+        raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualizar")
 
-    # --- INÍCIO DA CORREÇÃO ---
-    # Mapeamento: "Chave do Pydantic": "Coluna no Banco de Dados"
+    # Apenas admin pode alterar o cargo
+    if "user_type" in update_data and current_user.get("cargo") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem alterar cargos")
+
+    # Mapeamento: chave Pydantic → coluna no banco
     key_mapping = {
         "name": "nome",
-        "user_type": "cargo"
-        # Adicione outros campos aqui se precisar (ex: "last_name": "sobrenome")
+        "user_type": "cargo",
     }
 
-    # Traduz as chaves para os nomes corretos do banco de dados
     for py_key, db_col in key_mapping.items():
         if py_key in update_data:
             update_data[db_col] = update_data.pop(py_key)
 
-    # O tratamento da senha continua o mesmo
     if "password" in update_data:
         from app.auth import generate_hash
         update_data["senha"] = generate_hash(update_data.pop("password"))
-    # --- FIM DA CORREÇÃO ---
 
-    # Agora as chaves do update_data estão em português (nome, cargo, senha)
     set_clause = ", ".join([f"{key} = %s" for key in update_data.keys()])
     values = list(update_data.values())
     values.append(email)
 
-    query = f"UPDATE users SET {set_clause} WHERE email = %s"
-    
-    # Executa e commita
-    cursor.execute(query, tuple(values))
+    cursor.execute(f"UPDATE users SET {set_clause} WHERE email = %s", tuple(values))
     conn.commit()
 
-    return {"message": "User updated successfully!"}
+    return {"message": "Usuário atualizado com sucesso!"}
 
 
 @router.delete("/{email}")
@@ -80,11 +83,13 @@ def delete_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
+    _check_self_or_admin(current_user, email)
+
     cursor.execute("SELECT email FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     cursor.execute("DELETE FROM users WHERE email = %s", (email,))
     conn.commit()
 
-    return {"message": "User deleted!"}
+    return {"message": "Usuário deletado com sucesso!"}

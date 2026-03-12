@@ -2,15 +2,38 @@ import mysql.connector
 from fastapi import Depends, HTTPException, status
 from app.config import HOST, USER, PASSWORD, DATABASE
 
+_schema_checked = False
+
+
+def _ensure_schema(conn):
+    """Verifica e atualiza o schema do banco uma única vez por instância."""
+    global _schema_checked
+    if _schema_checked:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("SHOW COLUMNS FROM chamados_midia LIKE 'mensagem_id'")
+        if not cur.fetchone():
+            cur.execute("ALTER TABLE chamados_midia ADD COLUMN mensagem_id INT NULL")
+            cur.execute(
+                "ALTER TABLE chamados_midia ADD CONSTRAINT fk_mensagem "
+                "FOREIGN KEY (mensagem_id) REFERENCES chamados_mensagens(id) ON DELETE CASCADE"
+            )
+            conn.commit()
+        cur.close()
+        _schema_checked = True
+    except Exception:
+        pass
+
+
 def get_db_connection():
     """
     Cria uma nova conexão para cada requisição.
-    O 'yield' pausa a função, entrega a conexão para a rota usar, 
+    O 'yield' pausa a função, entrega a conexão para a rota usar,
     e o 'finally' garante que ela seja fechada mesmo se der erro na rota.
     """
     conn = None
     try:
-        # HOST pode vir como "127.0.0.1:3306" — separar host e porta
         db_host = HOST.split(":")[0] if ":" in HOST else HOST
         db_port = int(HOST.split(":")[1]) if ":" in HOST else 3306
 
@@ -21,32 +44,16 @@ def get_db_connection():
             password=PASSWORD,
             database=DATABASE
         )
-        # ensure_called_table has mensagem_id column
-        try:
-            temp_cursor = conn.cursor()
-            temp_cursor.execute("SHOW COLUMNS FROM chamados_midia LIKE 'mensagem_id'")
-            if not temp_cursor.fetchone():
-                temp_cursor.execute("ALTER TABLE chamados_midia ADD COLUMN mensagem_id INT NULL")
-                temp_cursor.execute(
-                    "ALTER TABLE chamados_midia ADD CONSTRAINT fk_mensagem FOREIGN KEY (mensagem_id) REFERENCES chamados_mensagens(id) ON DELETE CASCADE"
-                )
-                conn.commit()
-            temp_cursor.close()
-        except Exception:
-            # ignore if table doesn't exist yet
-            pass
-        # Entrega a conexão para a requisição atual
+        _ensure_schema(conn)
         yield conn
-        
+
     except mysql.connector.Error as err:
-        print(f"Erro de Banco de Dados: {err}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao conectar com o banco de dados."
         )
-        
+
     finally:
-        # Após a requisição terminar (com sucesso ou erro), fecha a conexão
         if conn and conn.is_connected():
             conn.close()
 

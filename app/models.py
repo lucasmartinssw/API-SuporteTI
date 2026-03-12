@@ -1,21 +1,17 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-class OperacaoDoisNumeros(BaseModel):
-    a: float
-    b: float
 
 class User(BaseModel):
     name: str
-    email: EmailStr # Garante que o formato do email seja válido
-    password: str 
+    email: EmailStr
+    password: str
     user_type: str
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-# Removi o UserRegistration pois era redundante/não utilizado
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -27,17 +23,8 @@ class UserUpdate(BaseModel):
 class ChamadoCreate(BaseModel):
     title: str
     description: str
-    priority: str = "medium"  # 'low', 'medium', 'high', 'urgent'
-    category: str = "Outros"  # Category name
-
-
-class ChamadoOut(BaseModel):
-    id: int
-    title: str
-    description: str
-    status: Optional[str] = None
-    priority: Optional[str] = None
-    user_email: Optional[EmailStr] = None
+    priority: str = "medium"
+    category: str = "Outros"
 
 
 class MensagemCreate(BaseModel):

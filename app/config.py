@@ -1,7 +1,8 @@
 import os
+import warnings
 from pathlib import Path
 
-# carregar .env apenas se existir (padrão de desenvolvimento)
+# Carregar .env apenas se existir (padrão de desenvolvimento)
 try:
     from dotenv import load_dotenv
     env_path = Path(__file__).parent.parent / ".env"
@@ -18,9 +19,15 @@ PASSWORD = os.getenv("PASSWORD", "root")
 DATABASE = os.getenv("DATABASE", "projetofinal")
 
 # JWT
-ACESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "20"))
-SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "20"))
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
+
+if not SECRET_KEY or SECRET_KEY == "your_secret_key":
+    warnings.warn(
+        "SECRET_KEY não configurada! Defina uma chave segura na variável de ambiente SECRET_KEY.",
+        stacklevel=2,
+    )
 
 # Supabase Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")

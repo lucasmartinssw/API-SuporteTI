@@ -1,12 +1,11 @@
-import os
+import traceback
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from app.models import ChamadoCreate, ChamadoOut, MensagemCreate
+from app.models import ChamadoCreate, MensagemCreate
 from app.auth import get_current_user
 from app.database import get_db_cursor, get_db_connection
 from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 from app.routers.notificacoes import create_notificacao
-import traceback
 
 router = APIRouter(prefix="/chamados", tags=["Chamados"])
 
@@ -101,8 +100,6 @@ def get_attachments_for_mensagem(mensagem_id, cursor) -> list:
         return []
 
 
-
-
 def get_tecnicos_for_chamado(chamado_id: int, cursor) -> list:
     """Get list of technicians assigned to a chamado."""
     try:
@@ -122,7 +119,7 @@ def get_chamado_with_access_check(chamado_id: int, current_user: dict, cursor) -
     cursor.execute("SELECT id, user_id FROM chamados WHERE id = %s", (chamado_id,))
     chamado = cursor.fetchone()
     if not chamado:
-        raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
+        raise HTTPException(status_code=404, detail="Chamado não encontrado")
 
     user_cargo = current_user.get('cargo')
     user_id = current_user.get('id')
@@ -209,11 +206,8 @@ def create_chamado_json(
 
         return {"message": "Chamado criado", "id": chamado_id}
     except Exception as e:
-        import traceback
-        import sys
-        print("Error creating chamado:")
-        traceback.print_exc(file=sys.stdout)
-        raise HTTPException(status_code=500, detail=f"Internal server error creating chamado: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Erro interno ao criar chamado")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -320,9 +314,8 @@ def create_chamado(
     except HTTPException:
         raise
     except Exception as e:
-        print("Error creating chamado:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro interno ao criar chamado")
 
 
 @router.get("/{chamado_id}")
@@ -352,7 +345,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
     cursor.execute("SELECT user_id, status_id, titulo FROM chamados WHERE id = %s", (chamado_id,))
     chamado = cursor.fetchone()
     if not chamado:
-        raise HTTPException(status_code=404, detail="Chamado not found")
+        raise HTTPException(status_code=404, detail="Chamado não encontrado")
 
     is_owner = chamado['user_id'] == user_id
     is_tech = user_cargo in ('admin', 'tecnico')
@@ -369,7 +362,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         allowed = {k: v for k, v in data.items() if k in ('status_id', 'prioridade_id')}
 
     if not allowed:
-        raise HTTPException(status_code=400, detail="No updatable fields provided")
+        raise HTTPException(status_code=400, detail="Nenhum campo atualizável fornecido")
 
     set_clause = ", ".join([f"{k} = %s" for k in allowed.keys()])
     values = list(allowed.values())
@@ -396,7 +389,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         except Exception as ne:
             print(f"Notification error: {ne}")
 
-    return {"message": "Chamado updated"}
+    return {"message": "Chamado atualizado"}
 
 
 @router.get("/{chamado_id}/mensagens")
@@ -485,9 +478,8 @@ def post_mensagem(
                         (chamado_id, mensagem_id, file_info['url'], file_info['content_type'])
                     )
                 except Exception as e:
-                    print("Error uploading file to Supabase:", str(e))
                     traceback.print_exc()
-                    raise HTTPException(status_code=500, detail=f"Error uploading attachment: {str(e)}")
+                    raise HTTPException(status_code=500, detail="Erro ao fazer upload do anexo")
             
             conn.commit()
 
@@ -517,9 +509,8 @@ def post_mensagem(
     except HTTPException:
         raise
     except Exception as e:
-        print("Error posting mensagem:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro interno ao enviar mensagem")
 
 @router.post("/{chamado_id}/tecnicos/{user_id}", status_code=status.HTTP_201_CREATED)
 def add_tecnico(
@@ -531,23 +522,22 @@ def add_tecnico(
 ):
     """Assign a technician to a chamado."""
     if current_user.get('cargo') not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=403, detail="Only technicians or admins can assign technicians")
+        raise HTTPException(status_code=403, detail="Apenas técnicos ou admins podem atribuir técnicos")
     get_chamado_with_access_check(chamado_id, current_user, cursor)
-    # Check user exists and is a tech/admin
     cursor.execute("SELECT id, cargo FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
     if user['cargo'] not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=400, detail="User is not a technician or admin")
+        raise HTTPException(status_code=400, detail="Usuário não é técnico ou admin")
     try:
         cursor.execute(
             "INSERT IGNORE INTO chamados_tecnicos (chamado_id, user_id) VALUES (%s, %s)",
             (chamado_id, user_id)
         )
         conn.commit()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Erro ao atribuir técnico")
     return {"message": "Técnico adicionado"}
 
 
@@ -561,7 +551,7 @@ def remove_tecnico(
 ):
     """Remove a technician from a chamado."""
     if current_user.get('cargo') not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=403, detail="Only technicians or admins can remove technicians")
+        raise HTTPException(status_code=403, detail="Apenas técnicos ou admins podem remover técnicos")
     cursor.execute(
         "DELETE FROM chamados_tecnicos WHERE chamado_id = %s AND user_id = %s",
         (chamado_id, user_id)
