@@ -123,7 +123,7 @@ def get_chamado_with_access_check(chamado_id: int, current_user: dict, cursor) -
     cursor.execute("SELECT id, user_id FROM chamados WHERE id = %s", (chamado_id,))
     chamado = cursor.fetchone()
     if not chamado:
-        raise HTTPException(status_code=404, detail=f"Chamado {chamado_id} not found")
+        raise HTTPException(status_code=404, detail="Chamado não encontrado")
 
     user_cargo = current_user.get('cargo')
     user_id = current_user.get('id')
@@ -362,7 +362,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
     cursor.execute("SELECT user_id, status_id, titulo FROM chamados WHERE id = %s", (chamado_id,))
     chamado = cursor.fetchone()
     if not chamado:
-        raise HTTPException(status_code=404, detail="Chamado not found")
+        raise HTTPException(status_code=404, detail="Chamado não encontrado")
 
     is_owner = chamado['user_id'] == user_id
     is_tech = user_cargo in ('admin', 'tecnico')
@@ -379,7 +379,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         allowed = {k: v for k, v in data.items() if k in ('status_id', 'prioridade_id')}
 
     if not allowed:
-        raise HTTPException(status_code=400, detail="No updatable fields provided")
+        raise HTTPException(status_code=400, detail="Nenhum campo atualizável fornecido")
 
     set_clause = ", ".join([f"{k} = %s" for k in allowed.keys()])
     values = list(allowed.values())
@@ -548,15 +548,15 @@ def add_tecnico(
 ):
     """Assign a technician to a chamado."""
     if current_user.get('cargo') not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=403, detail="Only technicians or admins can assign technicians")
+        raise HTTPException(status_code=403, detail="Apenas técnicos ou admins podem atribuir técnicos")
     get_chamado_with_access_check(chamado_id, current_user, cursor)
     # Check user exists and is a tech/admin
     cursor.execute("SELECT id, cargo FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
     if user['cargo'] not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=400, detail="User is not a technician or admin")
+        raise HTTPException(status_code=400, detail="Usuário não é técnico ou admin")
     try:
         cursor.execute(
             "INSERT IGNORE INTO chamados_tecnicos (chamado_id, user_id) VALUES (%s, %s)",
@@ -584,7 +584,7 @@ def remove_tecnico(
 ):
     """Remove a technician from a chamado."""
     if current_user.get('cargo') not in ('admin', 'tecnico'):
-        raise HTTPException(status_code=403, detail="Only technicians or admins can remove technicians")
+        raise HTTPException(status_code=403, detail="Apenas técnicos ou admins podem remover técnicos")
     get_chamado_with_access_check(chamado_id, current_user, cursor)
     cursor.execute(
         "DELETE FROM chamados_tecnicos WHERE chamado_id = %s AND user_id = %s",
