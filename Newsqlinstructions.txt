@@ -116,3 +116,13 @@ ALTER TABLE chamados_mensagens ADD COLUMN is_internal BOOLEAN DEFAULT FALSE;
   SELECT * FROM prioridades;
 SELECT * FROM status_chamado;
 SELECT * FROM categorias;
+
+-- ============================================================
+--  MIGRATION: Update asset statuses to real-world IT values
+-- ============================================================
+
+ALTER TABLE ativos MODIFY COLUMN status ENUM('disponivel','em_uso','manutencao','emprestado','desativado') DEFAULT 'disponivel';
+
+-- Migrate existing data from old statuses to new ones
+UPDATE ativos SET status = 'em_uso' WHERE status = 'ativo';
+UPDATE ativos SET status = 'disponivel' WHERE status = 'reserva';

@@ -3,7 +3,7 @@ from datetime import timedelta
 from app.models import User, UserLogin
 from app.auth import generate_hash, verify_password, create_token
 from app.database import get_db_cursor, get_db_connection
-from app.config import ACESS_TOKEN_EXPIRE_MINUTES
+from app.config import ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 def register(user: User, cursor=Depends(get_db_cursor), conn=Depends(get_db_connection)):
     cursor.execute("SELECT email FROM users WHERE email = %s", (user.email,))
     if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
 
     hashed_password = generate_hash(user.password)
 
@@ -28,7 +28,7 @@ def register(user: User, cursor=Depends(get_db_cursor), conn=Depends(get_db_conn
     except Exception:
         pass
 
-    return {"message": "User created!", "user_id": user_id}
+    return {"message": "Usuário criado com sucesso!", "user_id": user_id}
 
 
 @router.post("/login")
@@ -37,13 +37,13 @@ def login(userLogin: UserLogin, cursor=Depends(get_db_cursor)):
     user_data = cursor.fetchone()
 
     if not user_data or not verify_password(userLogin.password, user_data['senha']):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid e-mail or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha inválidos")
 
     # Block deactivated accounts — same error message to avoid revealing account existence
     if user_data.get('ativo', 1) == 0:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid e-mail or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha inválidos")
 
-    expires_delta = timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES)
+    expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     token = create_token(data={"sub": user_data['email']}, expires_delta=expires_delta)
 
     return {

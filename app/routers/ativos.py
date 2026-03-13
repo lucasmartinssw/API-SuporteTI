@@ -17,7 +17,7 @@ class AtivoCreate(BaseModel):
     numero_serie: Optional[str] = None
     patrimonio: Optional[str] = None
     localizacao: Optional[str] = None
-    status: Optional[str] = "ativo"
+    status: Optional[str] = "disponivel"
     responsavel_id: Optional[int] = None
     observacoes: Optional[str] = None
     warranty_expires_at: Optional[str] = None  # ISO date string YYYY-MM-DD
@@ -62,7 +62,7 @@ def list_ativos(
     cargo = current_user.get("cargo")
     # Regular users only see active assets; techs/admins see all unless filtered
     if cargo not in ("admin", "tecnico"):
-        base_query += " AND a.status = 'ativo'"
+        base_query += " AND a.status NOT IN ('desativado', 'manutencao')"
 
     if tipo:
         base_query += " AND a.tipo = %s"
@@ -117,7 +117,7 @@ def create_ativo(
             data.numero_serie,
             data.patrimonio,
             data.localizacao,
-            data.status or "ativo",
+            data.status or "disponivel",
             data.responsavel_id,
             data.observacoes,
             data.warranty_expires_at or None,

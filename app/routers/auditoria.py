@@ -17,7 +17,7 @@ def log_auditoria(
     """Helper — call from other routers to log an audit event."""
     try:
         cursor.execute(
-            "INSERT INTO auditoria (tabela, registro_id, user_id, acao, detalhe) "
+            "INSERT INTO auditoria (tabela, registro_id, usuario_id, acao, descricao) "
             "VALUES (%s, %s, %s, %s, %s)",
             (tabela, registro_id, user_id, acao, detalhe)
         )
@@ -47,10 +47,10 @@ def get_chamado_auditoria(
 
     cursor.execute(
         """
-        SELECT a.id, a.acao, a.detalhe, a.created_at,
+        SELECT a.id, a.acao, a.descricao AS detalhe, a.created_at,
                u.nome AS user_nome, u.email AS user_email, u.cargo AS user_cargo
         FROM auditoria a
-        JOIN users u ON a.user_id = u.id
+        JOIN users u ON a.usuario_id = u.id
         WHERE a.tabela = 'chamados' AND a.registro_id = %s
         ORDER BY a.created_at ASC
         """,
@@ -71,10 +71,10 @@ def get_ativo_auditoria(
 
     cursor.execute(
         """
-        SELECT a.id, a.acao, a.detalhe, a.created_at,
+        SELECT a.id, a.acao, a.descricao AS detalhe, a.created_at,
                u.nome AS user_nome, u.email AS user_email, u.cargo AS user_cargo
         FROM auditoria a
-        JOIN users u ON a.user_id = u.id
+        JOIN users u ON a.usuario_id = u.id
         WHERE a.tabela = 'ativos' AND a.registro_id = %s
         ORDER BY a.created_at ASC
         """,

@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS ativos (
   numero_serie       VARCHAR(100),
   patrimonio         VARCHAR(50),
   localizacao        VARCHAR(100),
-  status             ENUM('ativo','manutencao','reserva','desativado') DEFAULT 'ativo',
+  status             ENUM('disponivel','em_uso','manutencao','emprestado','desativado') DEFAULT 'disponivel',
   responsavel_id     INT NULL,
   observacoes        TEXT,
   warranty_expires_at DATE NULL,

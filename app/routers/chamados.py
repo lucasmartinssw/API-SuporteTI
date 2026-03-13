@@ -1,7 +1,6 @@
-import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from app.models import ChamadoCreate, ChamadoOut, MensagemCreate
+from app.models import ChamadoCreate
 from app.auth import get_current_user
 from app.database import get_db_cursor, get_db_connection
 from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
@@ -212,11 +211,11 @@ def create_chamado_json(
 
         return {"message": "Chamado criado", "id": chamado_id}
     except Exception as e:
-        import traceback
+        import traceback as tb
         import sys
         print("Error creating chamado:")
-        traceback.print_exc(file=sys.stdout)
-        raise HTTPException(status_code=500, detail=f"Internal server error creating chamado: {str(e)}")
+        tb.print_exc(file=sys.stdout)
+        raise HTTPException(status_code=500, detail=f"Erro interno ao criar chamado: {str(e)}")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -329,7 +328,7 @@ def create_chamado(
     except Exception as e:
         print("Error creating chamado:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno ao criar chamado: {str(e)}")
 
 
 @router.get("/{chamado_id}")
@@ -410,7 +409,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         log_auditoria('chamados', chamado_id, user_id, 'prioridade_alterada',
             f"Prioridade alterada para '{new_prio}' por {actor_name}", cursor, conn)
 
-    return {"message": "Chamado updated"}
+    return {"message": "Chamado atualizado"}
 
 
 @router.get("/{chamado_id}/mensagens")
@@ -538,7 +537,7 @@ def post_mensagem(
     except Exception as e:
         print("Error posting mensagem:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro interno ao enviar mensagem: {str(e)}")
 
 @router.post("/{chamado_id}/tecnicos/{user_id}", status_code=status.HTTP_201_CREATED)
 def add_tecnico(

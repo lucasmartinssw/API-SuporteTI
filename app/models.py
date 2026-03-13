@@ -1,9 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
-class OperacaoDoisNumeros(BaseModel):
-    a: float
-    b: float
 
 class User(BaseModel):
     name: str

@@ -306,7 +306,7 @@ def deactivate_user(
 
 
 
-# ── Existing endpoints (legacy, kept for compatibility) ──────────────
+# ── Legacy endpoints (restricted to admin/tecnico) ──────────────
 
 @router.patch("/{email}")
 def update_user(
@@ -316,13 +316,16 @@ def update_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
+    if current_user.get("cargo") not in ("admin", "tecnico"):
+        raise HTTPException(status_code=403, detail="Sem permissão.")
+
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     update_data = user_update.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(status_code=400, detail="No data provided to update")
+        raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualização")
 
     key_mapping = {
         "name": "nome",
@@ -345,7 +348,7 @@ def update_user(
     cursor.execute(query, tuple(values))
     conn.commit()
 
-    return {"message": "User updated successfully!"}
+    return {"message": "Usuário atualizado com sucesso!"}
 
 
 @router.delete("/{email}")
@@ -355,11 +358,14 @@ def delete_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
+    if current_user.get("cargo") not in ("admin", "tecnico"):
+        raise HTTPException(status_code=403, detail="Sem permissão.")
+
     cursor.execute("SELECT email FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
     cursor.execute("DELETE FROM users WHERE email = %s", (email,))
     conn.commit()
 
-    return {"message": "User deleted!"}
+    return {"message": "Usuário removido!"}
