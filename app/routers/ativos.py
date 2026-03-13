@@ -1,9 +1,10 @@
 from typing import Optional, List, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
 from app.auth import get_current_user
 from app.routers.auditoria import log_auditoria
 from app.database import get_db_cursor, get_db_connection
+from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
 
 router = APIRouter(prefix="/ativos", tags=["Ativos"])
 
@@ -19,6 +20,7 @@ class AtivoCreate(BaseModel):
     status: Optional[str] = "ativo"
     responsavel_id: Optional[int] = None
     observacoes: Optional[str] = None
+    warranty_expires_at: Optional[str] = None  # ISO date string YYYY-MM-DD
 
 class AtivoUpdate(BaseModel):
     nome: Optional[str] = None
@@ -29,6 +31,7 @@ class AtivoUpdate(BaseModel):
     status: Optional[str] = None
     responsavel_id: Optional[int] = None
     observacoes: Optional[str] = None
+    warranty_expires_at: Optional[str] = None  # ISO date string YYYY-MM-DD
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -105,8 +108,8 @@ def create_ativo(
     cursor.execute(
         """
         INSERT INTO ativos
-            (nome, tipo, numero_serie, patrimonio, localizacao, status, responsavel_id, observacoes, created_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            (nome, tipo, numero_serie, patrimonio, localizacao, status, responsavel_id, observacoes, warranty_expires_at, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         """,
         (
             data.nome,
@@ -117,6 +120,7 @@ def create_ativo(
             data.status or "ativo",
             data.responsavel_id,
             data.observacoes,
+            data.warranty_expires_at or None,
         ),
     )
     conn.commit()
@@ -164,6 +168,17 @@ def get_ativo(
         (ativo_id,),
     )
     ativo["chamados"] = cursor.fetchall()
+
+    # Fetch attached files
+    cursor.execute(
+        "SELECT id, url_arquivo AS url, tipo_arquivo AS type, nome_arquivo AS name FROM ativos_midia WHERE ativo_id = %s ORDER BY created_at DESC",
+        (ativo_id,)
+    )
+    ativo["files"] = [
+        {'id': str(r['id']), 'url': r['url'], 'type': r['type'], 'name': r['name']}
+        for r in cursor.fetchall()
+    ]
+
     return ativo
 
 
@@ -277,3 +292,74 @@ def unlink_chamado(
     log_auditoria('chamados', chamado_id, current_user['id'], 'ativo_desvinculado',
         f"Ativo #{ativo_id} desvinculado por {actor}", cursor, conn)
     return {"message": "Vínculo removido."}
+
+# ── FILE ATTACHMENTS ──────────────────────────────────────────────────────────
+
+@router.post("/{ativo_id}/files", status_code=status.HTTP_201_CREATED)
+def upload_ativo_file(
+    ativo_id: int,
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(get_current_user),
+    cursor=Depends(get_db_cursor),
+    conn=Depends(get_db_connection),
+):
+    _require_tech(current_user)
+    cursor.execute("SELECT id FROM ativos WHERE id = %s", (ativo_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Ativo não encontrado.")
+
+    uploaded = []
+    for upload in files:
+        try:
+            # Reuse supabase_storage — pass ativo_id as chamado_id (same path logic)
+            file_info = upload_file_to_supabase(upload, ativo_id)
+            cursor.execute(
+                "INSERT INTO ativos_midia (ativo_id, url_arquivo, tipo_arquivo, nome_arquivo) VALUES (%s, %s, %s, %s)",
+                (ativo_id, file_info['url'], file_info['content_type'], file_info['file_name'])
+            )
+            uploaded.append({
+                'id': str(cursor.lastrowid),
+                'url': file_info['url'],
+                'type': file_info['content_type'],
+                'name': file_info['file_name'],
+            })
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro ao fazer upload: {str(e)}")
+
+    conn.commit()
+    actor = current_user.get('nome') or current_user.get('email', '')
+    log_auditoria('ativos', ativo_id, current_user['id'], 'arquivo_anexado',
+        f"{len(uploaded)} arquivo(s) anexado(s) por {actor}", cursor, conn)
+    return {"message": f"{len(uploaded)} arquivo(s) enviado(s).", "files": uploaded}
+
+
+@router.delete("/{ativo_id}/files/{file_id}")
+def delete_ativo_file(
+    ativo_id: int,
+    file_id: int,
+    current_user: dict = Depends(get_current_user),
+    cursor=Depends(get_db_cursor),
+    conn=Depends(get_db_connection),
+):
+    _require_tech(current_user)
+    cursor.execute(
+        "SELECT id, url_arquivo FROM ativos_midia WHERE id = %s AND ativo_id = %s",
+        (file_id, ativo_id)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado.")
+
+    # Best-effort delete from Supabase storage
+    try:
+        url = row['url_arquivo']
+        # Extract path after /object/public/<bucket>/
+        if '/object/public/' in url:
+            file_path = url.split('/object/public/')[-1].split('/', 1)[-1]
+            delete_file_from_supabase(file_path)
+    except Exception:
+        pass  # Don't fail if storage delete fails
+
+    cursor.execute("DELETE FROM ativos_midia WHERE id = %s", (file_id,))
+    conn.commit()
+    return {"message": "Arquivo removido."}

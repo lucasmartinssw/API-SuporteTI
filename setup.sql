@@ -201,3 +201,55 @@ SELECT 'Setup concluído com sucesso!' AS status;
 SELECT TABLE_NAME FROM information_schema.TABLES
   WHERE TABLE_SCHEMA = 'projetofinal'
   ORDER BY TABLE_NAME;
+-- ============================================================
+--  WARRANTY LIFECYCLE — run this if upgrading an existing DB
+-- ============================================================
+DROP PROCEDURE IF EXISTS add_warranty_column;
+DELIMITER $$
+CREATE PROCEDURE add_warranty_column()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME  = 'ativos'
+      AND COLUMN_NAME = 'warranty_expires_at'
+  ) THEN
+    ALTER TABLE ativos ADD COLUMN warranty_expires_at DATE NULL DEFAULT NULL;
+  END IF;
+END$$
+DELIMITER ;
+CALL add_warranty_column();
+DROP PROCEDURE IF EXISTS add_warranty_column;
+
+-- ============================================================
+--  ARQUIVO NOME — save original filename in chamados_midia
+-- ============================================================
+DROP PROCEDURE IF EXISTS add_nome_arquivo_column;
+DELIMITER $$
+CREATE PROCEDURE add_nome_arquivo_column()
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME  = 'chamados_midia'
+      AND COLUMN_NAME = 'nome_arquivo'
+  ) THEN
+    ALTER TABLE chamados_midia ADD COLUMN nome_arquivo VARCHAR(255) NULL DEFAULT NULL;
+  END IF;
+END$$
+DELIMITER ;
+CALL add_nome_arquivo_column();
+DROP PROCEDURE IF EXISTS add_nome_arquivo_column;
+
+-- ============================================================
+--  ASSET FILE ATTACHMENTS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ativos_midia (
+  id           INT PRIMARY KEY AUTO_INCREMENT,
+  ativo_id     INT NOT NULL,
+  url_arquivo  VARCHAR(500) NOT NULL,
+  tipo_arquivo VARCHAR(100),
+  nome_arquivo VARCHAR(255),
+  created_at   DATETIME DEFAULT NOW(),
+  FOREIGN KEY (ativo_id) REFERENCES ativos(id) ON DELETE CASCADE
+);

@@ -54,20 +54,18 @@ def get_attachments_for_chamado(chamado_id, cursor) -> list:
     """Get attachments for a chamado from chamados_midia table (excluding message files)"""
     try:
         cursor.execute(
-            "SELECT id, url_arquivo as url, tipo_arquivo as type FROM chamados_midia WHERE chamado_id = %s AND mensagem_id IS NULL", 
+            "SELECT id, url_arquivo as url, tipo_arquivo as type, nome_arquivo as name FROM chamados_midia WHERE chamado_id = %s AND mensagem_id IS NULL", 
             (chamado_id,)
         )
         arquivos = cursor.fetchall()
         
         attachments = []
         for arquivo in arquivos:
-            # Extract filename from URL or use generic name
-            url_parts = arquivo['url'].split('/')
-            filename = url_parts[-1] if url_parts else f"arquivo_{arquivo['id']}"
+            fallback_name = arquivo['url'].split('/')[-1] if arquivo.get('url') else f"arquivo_{arquivo['id']}"
             attachments.append({
                 'id': str(arquivo['id']),
                 'url': arquivo['url'],
-                'name': filename,
+                'name': arquivo.get('name') or fallback_name,
                 'type': arquivo['type']
             })
         return attachments
@@ -82,18 +80,17 @@ def get_attachments_for_mensagem(mensagem_id, cursor) -> list:
     """Get attachments associated with a specific mensagem_id"""
     try:
         cursor.execute(
-            "SELECT id, url_arquivo as url, tipo_arquivo as type FROM chamados_midia WHERE mensagem_id = %s", 
+            "SELECT id, url_arquivo as url, tipo_arquivo as type, nome_arquivo as name FROM chamados_midia WHERE mensagem_id = %s", 
             (mensagem_id,)
         )
         arquivos = cursor.fetchall()
         attachments = []
         for arquivo in arquivos:
-            url_parts = arquivo['url'].split('/')
-            filename = url_parts[-1] if url_parts else f"arquivo_{arquivo['id']}"
+            fallback_name = arquivo['url'].split('/')[-1] if arquivo.get('url') else f"arquivo_{arquivo['id']}"
             attachments.append({
                 'id': str(arquivo['id']),
                 'url': arquivo['url'],
-                'name': filename,
+                'name': arquivo.get('name') or fallback_name,
                 'type': arquivo['type']
             })
         return attachments
@@ -285,8 +282,8 @@ def create_chamado(
                     
                     # Save metadata in database
                     cursor.execute(
-                        "INSERT INTO chamados_midia (chamado_id, url_arquivo, tipo_arquivo) VALUES (%s, %s, %s)",
-                        (chamado_id, file_info['url'], file_info['content_type'])
+                        "INSERT INTO chamados_midia (chamado_id, url_arquivo, tipo_arquivo, nome_arquivo) VALUES (%s, %s, %s, %s)",
+                        (chamado_id, file_info['url'], file_info['content_type'], file_info['file_name'])
                     )
                     files_uploaded += 1
                 except Exception as e:
@@ -441,7 +438,7 @@ def list_mensagens(chamado_id: int, current_user: dict = Depends(get_current_use
 @router.post("/{chamado_id}/mensagens", status_code=status.HTTP_201_CREATED)
 def post_mensagem(
     chamado_id: int,
-    mensagem: str = Form(..., description="Conteúdo da mensagem/resposta"),
+    mensagem: str = Form("", description="Conteúdo da mensagem/resposta"),
     is_internal: bool = Form(False, description="Se a mensagem é interna (visível apenas para TI)"),
     files: Optional[List[UploadFile]] = File(default=None, description="Arquivos anexos (opcional)"),
     current_user: dict = Depends(get_current_user),
@@ -451,19 +448,24 @@ def post_mensagem(
     """Post message with optional file attachments using Supabase Storage"""
     get_chamado_with_access_check(chamado_id, current_user, cursor)
 
+    mensagem = (mensagem or "").strip()
+
     user_cargo = current_user.get('cargo')
     if is_internal and user_cargo not in ('admin', 'tecnico'):
         raise HTTPException(status_code=403, detail="Apenas a equipe de TI pode enviar mensagens internas")
-    
-    user_id = current_user.get('id')
-    
-    # Tratamento corrigido para lidar com nulos e strings vazias do Swagger
+
+    # Normalise files list before we check it
     if files is None:
         files = []
     elif isinstance(files, str):
         files = []
     elif isinstance(files, list):
         files = [f for f in files if not isinstance(f, str)]
+
+    if not mensagem and not files:
+        raise HTTPException(status_code=400, detail="Mensagem ou arquivo obrigatório.")
+
+    user_id = current_user.get('id')
     
     try:
         # Insert message in database
@@ -498,8 +500,8 @@ def post_mensagem(
                     
                     # Save metadata in database
                     cursor.execute(
-                        "INSERT INTO chamados_midia (chamado_id, mensagem_id, url_arquivo, tipo_arquivo) VALUES (%s, %s, %s, %s)",
-                        (chamado_id, mensagem_id, file_info['url'], file_info['content_type'])
+                        "INSERT INTO chamados_midia (chamado_id, mensagem_id, url_arquivo, tipo_arquivo, nome_arquivo) VALUES (%s, %s, %s, %s, %s)",
+                        (chamado_id, mensagem_id, file_info['url'], file_info['content_type'], file_info['file_name'])
                     )
                 except Exception as e:
                     print("Error uploading file to Supabase:", str(e))
