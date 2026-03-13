@@ -31,4 +31,4 @@ SUPABASE_SERVICE_ROLE_KEY = (
     or os.getenv("SUPABASE_SERVICE_KEY", "")
     or os.getenv("SUPABASE_SECRET_KEY", "")
 )
-SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "chamados-files")  # default plural
+SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", "chamados-file")  # match bucket name in Supabase

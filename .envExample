@@ -1,0 +1,20 @@
+# Configuração do Supabase
+# Substitua com suas credenciais reais do Supabase
+
+
+SUPABASE_URL= 
+SUPABASE_KEY= 
+SUPABASE_BUCKET=chamados-file
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Configuração MySQL
+HOST=127.0.0.1:3306
+USER=root
+PASSWORD=
+DATABASE=projetofinal
+
+
+# JWT
+SECRET_KEY=
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=20

@@ -39,6 +39,10 @@ def login(userLogin: UserLogin, cursor=Depends(get_db_cursor)):
     if not user_data or not verify_password(userLogin.password, user_data['senha']):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid e-mail or password")
 
+    # Block deactivated accounts — same error message to avoid revealing account existence
+    if user_data.get('ativo', 1) == 0:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid e-mail or password")
+
     expires_delta = timedelta(minutes=ACESS_TOKEN_EXPIRE_MINUTES)
     token = create_token(data={"sub": user_data['email']}, expires_delta=expires_delta)
 
