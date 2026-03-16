@@ -186,7 +186,8 @@ INSERT IGNORE INTO prioridades (id, nivel) VALUES
 INSERT IGNORE INTO status_chamado (id, nome) VALUES
   (1, 'Aberto'),
   (2, 'Em Atendimento'),
-  (3, 'Concluído');
+  (3, 'Concluído'),
+  (4, 'Fechado');
 
 INSERT IGNORE INTO categorias (id, nome) VALUES
   (1, 'Geral'),
@@ -195,11 +196,6 @@ INSERT IGNORE INTO categorias (id, nome) VALUES
   (4, 'Rede'),
   (5, 'Acesso'),
   (6, 'Outros');
-
-
-  ALTER TABLE users ADD COLUMN bio TEXT NULL;
-ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL;
-ALTER TABLE users ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1;
 
 INSERT IGNORE INTO ativos (id, nome, tipo, numero_serie, patrimonio, localizacao, status, observacoes) VALUES
   (1,  'Desktop Dell OptiPlex 7090',     'computador', 'SN-DELL-7090-001',    'PAT-2024-001', 'Sala 101 - TI',           'ativo',      'Core i7, 16GB RAM, SSD 512GB'),

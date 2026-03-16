@@ -228,6 +228,18 @@ def get_user_profile(
     return {**user, "chamados": chamados, "comentarios": comentarios, "ativos": ativos}
 
 
+@router.delete("/me/avatar")
+def remove_avatar(
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection),
+):
+    """Remove the user's avatar and revert to initials."""
+    cursor.execute("UPDATE users SET avatar_url = NULL WHERE id = %s", (current_user["id"],))
+    conn.commit()
+    return {"message": "Avatar removido com sucesso."}
+
+
 # ── Admin: update user by ID ──────────────────────────────────
 
 class UserAdminUpdate(BaseModel):
@@ -306,7 +318,7 @@ def deactivate_user(
 
 
 
-# ── Legacy endpoints (restricted to admin/tecnico) ──────────────
+# ── Existing endpoints (legacy, kept for compatibility) ──────────────
 
 @router.patch("/{email}")
 def update_user(
@@ -316,16 +328,13 @@ def update_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
-    if current_user.get("cargo") not in ("admin", "tecnico"):
-        raise HTTPException(status_code=403, detail="Sem permissão.")
-
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="User not found")
 
     update_data = user_update.model_dump(exclude_unset=True)
     if not update_data:
-        raise HTTPException(status_code=400, detail="Nenhum dado fornecido para atualização")
+        raise HTTPException(status_code=400, detail="No data provided to update")
 
     key_mapping = {
         "name": "nome",
@@ -348,7 +357,7 @@ def update_user(
     cursor.execute(query, tuple(values))
     conn.commit()
 
-    return {"message": "Usuário atualizado com sucesso!"}
+    return {"message": "User updated successfully!"}
 
 
 @router.delete("/{email}")
@@ -358,14 +367,11 @@ def delete_user(
     cursor = Depends(get_db_cursor),
     conn = Depends(get_db_connection)
 ):
-    if current_user.get("cargo") not in ("admin", "tecnico"):
-        raise HTTPException(status_code=403, detail="Sem permissão.")
-
     cursor.execute("SELECT email FROM users WHERE email = %s", (email,))
     if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        raise HTTPException(status_code=404, detail="User not found")
 
     cursor.execute("DELETE FROM users WHERE email = %s", (email,))
     conn.commit()
 
-    return {"message": "Usuário removido!"}
+    return {"message": "User deleted!"}

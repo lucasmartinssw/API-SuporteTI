@@ -1,6 +1,7 @@
+import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from app.models import ChamadoCreate
+from app.models import ChamadoCreate, ChamadoOut, MensagemCreate
 from app.auth import get_current_user
 from app.database import get_db_cursor, get_db_connection
 from app.supabase_storage import upload_file_to_supabase, delete_file_from_supabase
@@ -211,11 +212,11 @@ def create_chamado_json(
 
         return {"message": "Chamado criado", "id": chamado_id}
     except Exception as e:
-        import traceback as tb
+        import traceback
         import sys
         print("Error creating chamado:")
-        tb.print_exc(file=sys.stdout)
-        raise HTTPException(status_code=500, detail=f"Erro interno ao criar chamado: {str(e)}")
+        traceback.print_exc(file=sys.stdout)
+        raise HTTPException(status_code=500, detail=f"Internal server error creating chamado: {str(e)}")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -328,7 +329,7 @@ def create_chamado(
     except Exception as e:
         print("Error creating chamado:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erro interno ao criar chamado: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/{chamado_id}")
@@ -368,7 +369,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         if not is_owner:
             raise HTTPException(status_code=403, detail="Sem permissão")
         new_status = data.get('status_id')
-        if new_status not in (1, 3):
+        if new_status not in (1, 3, 4):
             raise HTTPException(status_code=403, detail="Usuários só podem fechar ou reabrir chamados")
         allowed = {'status_id': new_status}
     else:
@@ -409,7 +410,7 @@ def update_chamado(chamado_id: int, data: dict, current_user: dict = Depends(get
         log_auditoria('chamados', chamado_id, user_id, 'prioridade_alterada',
             f"Prioridade alterada para '{new_prio}' por {actor_name}", cursor, conn)
 
-    return {"message": "Chamado atualizado"}
+    return {"message": "Chamado updated"}
 
 
 @router.get("/{chamado_id}/mensagens")
@@ -418,7 +419,7 @@ def list_mensagens(chamado_id: int, current_user: dict = Depends(get_current_use
     
     # Join with users to fetch author name and email
     cursor.execute(
-        "SELECT m.id, m.chamado_id, m.user_id, u.nome AS author_name, LOWER(u.email) AS author_email, m.mensagem, m.enviado_em, m.is_internal "
+        "SELECT m.id, m.chamado_id, m.user_id, u.nome AS author_name, LOWER(u.email) AS author_email, u.avatar_url, m.mensagem, m.enviado_em, m.is_internal "
         "FROM chamados_mensagens m "
         "LEFT JOIN users u ON u.id = m.user_id "
         "WHERE m.chamado_id = %s "
@@ -537,7 +538,7 @@ def post_mensagem(
     except Exception as e:
         print("Error posting mensagem:", str(e))
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Erro interno ao enviar mensagem: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/{chamado_id}/tecnicos/{user_id}", status_code=status.HTTP_201_CREATED)
 def add_tecnico(

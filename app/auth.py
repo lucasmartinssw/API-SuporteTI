@@ -3,9 +3,9 @@ from jose import jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import mysql.connector
 
-from app.config import SECRET_KEY, ALGORITHM
-from app.database import get_db_connection
+from app.config import SECRET_KEY, ALGORITHM, HOST, USER, PASSWORD, DATABASE
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -26,10 +26,7 @@ def create_token(data: dict, expires_delta: timedelta):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    conn = Depends(get_db_connection)
-):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
@@ -40,19 +37,32 @@ def get_current_user(
         email = payload.get("sub")
 
         if email is None:
-            raise HTTPException(status_code=401, detail="Token inválido")
+            raise HTTPException(status_code=401, detail="Invalid token")
 
+        # Parse host and port from HOST config (format: "127.0.0.1:3306")
+        host_parts = HOST.split(":")
+        db_host = host_parts[0]
+        db_port = int(host_parts[1]) if len(host_parts) > 1 else 3306
+
+        conn = mysql.connector.connect(
+            host=db_host,
+            port=db_port,
+            user=USER,
+            password=PASSWORD,
+            database=DATABASE
+        )
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, nome, email, cargo FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT id, nome, email, cargo, COALESCE(ativo, 1) as ativo FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         cursor.close()
+        conn.close()
 
-        if not user:
-            raise HTTPException(status_code=401, detail="Usuário não encontrado")
+        if not user or user.get("ativo", 1) == 0:
+            raise HTTPException(status_code=401, detail="User not found")
 
         return user
 
     except HTTPException:
         raise
-    except Exception:
-        raise HTTPException(status_code=401, detail="Token inválido")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid token")
