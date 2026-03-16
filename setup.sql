@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS ativos (
   numero_serie       VARCHAR(100),
   patrimonio         VARCHAR(50),
   localizacao        VARCHAR(100),
-  status             ENUM('disponivel','em_uso','manutencao','emprestado','desativado') DEFAULT 'disponivel',
+  status             ENUM('ativo','manutencao','reserva','desativado') DEFAULT 'ativo',
   responsavel_id     INT NULL,
   observacoes        TEXT,
   warranty_expires_at DATE NULL,
@@ -195,6 +195,11 @@ INSERT IGNORE INTO categorias (id, nome) VALUES
   (4, 'Rede'),
   (5, 'Acesso'),
   (6, 'Outros');
+
+
+  ALTER TABLE users ADD COLUMN bio TEXT NULL;
+ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500) NULL;
+ALTER TABLE users ADD COLUMN ativo TINYINT(1) NOT NULL DEFAULT 1;
 
 INSERT IGNORE INTO ativos (id, nome, tipo, numero_serie, patrimonio, localizacao, status, observacoes) VALUES
   (1,  'Desktop Dell OptiPlex 7090',     'computador', 'SN-DELL-7090-001',    'PAT-2024-001', 'Sala 101 - TI',           'ativo',      'Core i7, 16GB RAM, SSD 512GB'),
