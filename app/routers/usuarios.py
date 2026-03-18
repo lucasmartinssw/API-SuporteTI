@@ -318,6 +318,25 @@ def deactivate_user(
 
 
 
+# ── Admin: reactivate user ────────────────────────────────────
+
+@router.patch("/{user_id}/reactivate")
+def reactivate_user(
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    cursor = Depends(get_db_cursor),
+    conn = Depends(get_db_connection),
+):
+    if current_user.get("cargo") not in ("admin", "tecnico"):
+        raise HTTPException(status_code=403, detail="Sem permissão.")
+    cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    cursor.execute("UPDATE users SET ativo = 1 WHERE id = %s", (user_id,))
+    conn.commit()
+    return {"message": "Usuário reativado com sucesso."}
+
+
 # ── Existing endpoints (legacy, kept for compatibility) ──────────────
 
 @router.patch("/{email}")
