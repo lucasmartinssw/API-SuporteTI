@@ -17,7 +17,7 @@ class AtivoCreate(BaseModel):
     numero_serie: Optional[str] = None
     patrimonio: Optional[str] = None
     localizacao: Optional[str] = None
-    status: Optional[str] = "disponivel"
+    status: Optional[str] = "disponivel"  # valid ENUM values: disponivel, em_uso, manutencao, emprestado, desativado
     responsavel_id: Optional[int] = None
     observacoes: Optional[str] = None
     warranty_expires_at: Optional[str] = None  # ISO date string YYYY-MM-DD
@@ -104,6 +104,10 @@ def create_ativo(
     valid_tipos = ("computador", "monitor", "impressora", "telefone", "servidor", "switch", "outro")
     if data.tipo not in valid_tipos:
         raise HTTPException(status_code=400, detail=f"Tipo inválido. Valores aceitos: {valid_tipos}")
+
+    valid_status = ("disponivel", "em_uso", "manutencao", "emprestado", "desativado")
+    if data.status and data.status not in valid_status:
+        raise HTTPException(status_code=400, detail=f"Status inválido. Valores aceitos: {valid_status}")
 
     cursor.execute(
         """
