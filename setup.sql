@@ -220,7 +220,9 @@ INSERT IGNORE INTO ativos (id, nome, tipo, numero_serie, patrimonio, localizacao
 
 SELECT 'Setup concluído com sucesso!' AS status;
 
+
 SELECT TABLE_NAME
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = 'projetofinal'
 ORDER BY TABLE_NAME;
+
