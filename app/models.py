@@ -26,6 +26,7 @@ class ChamadoCreate(BaseModel):
     description: str
     priority: str = "medium"  # 'low', 'medium', 'high', 'urgent'
     category: str = "Outros"  # Category name
+    asset_id: Optional[int] = None
 
 
 class ChamadoOut(BaseModel):

@@ -74,6 +74,22 @@ def get_attachments_for_chamado(chamado_id, cursor) -> list:
         return []
 
 
+def get_linked_assets_for_chamado(chamado_id: int, cursor) -> list:
+    """Get list of ativos linked to a chamado."""
+    try:
+        cursor.execute(
+            "SELECT a.id, a.nome, a.tipo, a.localizacao "
+            "FROM chamados_ativos ca "
+            "JOIN ativos a ON a.id = ca.ativo_id "
+            "WHERE ca.chamado_id = %s",
+            (chamado_id,)
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting linked assets: {str(e)}")
+        return []
+
+
 # ──── Message helpers ───────────────────────────────
 
 def get_attachments_for_mensagem(mensagem_id, cursor) -> list:
@@ -151,11 +167,16 @@ def list_chamados(current_user: dict = Depends(get_current_user), cursor = Depen
 
     chamados = cursor.fetchall()
     
-    # Add attachments and technicians to each chamado
+    # Add attachments, technicians and linked assets to each chamado
     for chamado in chamados:
         chamado['attachments'] = get_attachments_for_chamado(chamado['id'], cursor)
         chamado['tecnicos'] = get_tecnicos_for_chamado(chamado['id'], cursor)
-    
+        linked_assets = get_linked_assets_for_chamado(chamado['id'], cursor)
+        chamado['ativos'] = linked_assets
+        if linked_assets:
+            chamado['ativo_id'] = linked_assets[0]['id']
+            chamado['ativo_nome'] = linked_assets[0]['nome']
+
     return chamados
 
 
@@ -195,6 +216,19 @@ def create_chamado_json(
             row = cursor.fetchone()
             chamado_id = row['id'] if row else None
 
+        # Link an asset to this ticket if provided
+        if chamado_id and getattr(chamado, 'asset_id', None):
+            try:
+                cursor.execute("SELECT id FROM ativos WHERE id = %s", (chamado.asset_id,))
+                if cursor.fetchone():
+                    cursor.execute(
+                        "INSERT IGNORE INTO chamados_ativos (chamado_id, ativo_id) VALUES (%s, %s)",
+                        (chamado_id, chamado.asset_id)
+                    )
+                    conn.commit()
+            except Exception:
+                pass
+
         # Notify all technicians and admins
         try:
             cursor.execute("SELECT id FROM users WHERE cargo IN ('tecnico', 'admin')")
@@ -225,6 +259,7 @@ def create_chamado(
     description: str = Form(..., description="Descrição detalhada do problema"),
     priority: str = Form("medium", description="Prioridade: low, medium, high, urgent"),
     category: str = Form("Outros", description="Categoria do chamado"),
+    asset_id: Optional[int] = Form(None, description="ID do ativo vinculado (opcional)"),
     files: List[UploadFile] = File(default=[], description="Arquivos anexos (opcional)"),
     current_user: dict = Depends(get_current_user),
     cursor = Depends(get_db_cursor),
@@ -270,6 +305,19 @@ def create_chamado(
             )
             row = cursor.fetchone()
             chamado_id = row['id'] if row else None
+
+        # Link asset to this ticket if provided
+        if chamado_id and asset_id:
+            try:
+                cursor.execute("SELECT id FROM ativos WHERE id = %s", (asset_id,))
+                if cursor.fetchone():
+                    cursor.execute(
+                        "INSERT IGNORE INTO chamados_ativos (chamado_id, ativo_id) VALUES (%s, %s)",
+                        (chamado_id, asset_id)
+                    )
+                    conn.commit()
+            except Exception:
+                pass
 
         # Upload attachments to Supabase Storage
         upload_errors = []
@@ -347,6 +395,11 @@ def get_chamado(chamado_id: int, current_user: dict = Depends(get_current_user),
 
     chamado['attachments'] = get_attachments_for_chamado(chamado_id, cursor)
     chamado['tecnicos'] = get_tecnicos_for_chamado(chamado_id, cursor)
+    linked_assets = get_linked_assets_for_chamado(chamado_id, cursor)
+    chamado['ativos'] = linked_assets
+    if linked_assets:
+        chamado['ativo_id'] = linked_assets[0]['id']
+        chamado['ativo_nome'] = linked_assets[0]['nome']
     return chamado
 
 
